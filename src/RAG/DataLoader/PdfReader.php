@@ -2,6 +2,7 @@
 
 namespace NeuronAI\RAG\DataLoader;
 
+use Exception;
 use NeuronAI\Exceptions\DataReaderException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
@@ -23,6 +24,9 @@ class PdfReader implements ReaderInterface
 
     protected array $env = [];
 
+    /**
+     * @throws DataReaderException
+     */
     public function __construct(?string $binPath = null)
     {
         $this->binPath = $binPath ?? $this->findPdfToText();
@@ -34,6 +38,9 @@ class PdfReader implements ReaderInterface
         return $this;
     }
 
+    /**
+     * @throws DataReaderException
+     */
     protected function findPdfToText(): string
     {
         $commonPaths = [
@@ -53,6 +60,9 @@ class PdfReader implements ReaderInterface
         throw new DataReaderException("The pdftotext binary was not found or is not executable.");
     }
 
+    /**
+     * @throws DataReaderException
+     */
     public function setPdf(string $pdf): self
     {
         if (!is_readable($pdf)) {
@@ -83,7 +93,7 @@ class PdfReader implements ReaderInterface
 
     protected function parseOptions(array $options): array
     {
-        $mapper = function (string $content): array {
+        $mapper = static function (string $content): array {
             $content = trim($content);
             if ('-' !== ($content[0] ?? '')) {
                 $content = '-' . $content;
@@ -92,7 +102,7 @@ class PdfReader implements ReaderInterface
             return explode(' ', $content, 2);
         };
 
-        $reducer = fn (array $carry, array $option): array => array_merge($carry, $option);
+        $reducer = static fn (array $carry, array $option): array => array_merge($carry, $option);
 
         return array_reduce(array_map($mapper, $options), $reducer, []);
     }
@@ -116,7 +126,7 @@ class PdfReader implements ReaderInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public static function getText(
         string $filePath,
@@ -124,6 +134,7 @@ class PdfReader implements ReaderInterface
     ): string {
         /** @phpstan-ignore new.static */
         $instance = new static();
+        $instance->setPdf($filePath);
 
         if (\array_key_exists('binPath', $options)) {
             $instance->setBinPath($options['binPath']);

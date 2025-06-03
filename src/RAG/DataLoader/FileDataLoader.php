@@ -59,7 +59,7 @@ class FileDataLoader extends AbstractDataLoader
             // Read the directory contents
             while (($entry = readdir($handle)) !== false) {
                 $fullPath = $directory.'/'.$entry;
-                if ($entry != '.' && $entry != '..') {
+                if ($entry !== '.' && $entry !== '..') {
                     if (is_dir($fullPath)) {
                         $documents = [...$documents, ...$this->getDocumentsFromDirectory($fullPath)];
                     } else {
@@ -106,7 +106,7 @@ class FileDataLoader extends AbstractDataLoader
     protected function getDocument(string $content, string $entry): mixed
     {
         $document = new Document($content);
-        $document->id = \uniqid();
+        $document->id = \uniqid('', true);
         $document->hash = \hash('sha256', $content);
         $document->sourceType = 'files';
         $document->sourceName = $entry;
