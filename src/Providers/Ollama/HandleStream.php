@@ -2,22 +2,27 @@
 
 namespace NeuronAI\Providers\Ollama;
 
+use Generator;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Messages\Message;
 use Psr\Http\Message\StreamInterface;
+use function array_unshift;
+use function compact;
+use function json_decode;
+use function json_encode;
 
 trait HandleStream
 {
-    public function stream(array|string $messages, callable $executeToolsCallback): \Generator
+    public function stream(array|string $messages, callable $executeToolsCallback): Generator
     {
         // Include the system prompt
         if (isset($this->system)) {
-            \array_unshift($messages, new Message(MessageRole::SYSTEM, $this->system));
+            array_unshift($messages, new Message(MessageRole::SYSTEM, $this->system));
         }
 
         $json = [
-            'stream' => true,
-            'model' => $this->model,
+            'stream'   => true,
+            'model'    => $this->model,
             'messages' => $this->messageMapper()->map($messages),
             ...$this->parameters,
         ];
@@ -26,20 +31,20 @@ trait HandleStream
             $json['tools'] = $this->generateToolsPayload();
         }
 
-        $stream = $this->client->post('chat', [
+        $stream = $this->getClient()->post('chat', [
             'stream' => true,
-            ...\compact('json')
+            ...compact('json'),
         ])->getBody();
 
-        while (! $stream->eof()) {
+        while (!$stream->eof()) {
             if (!$line = $this->parseNextJson($stream)) {
                 continue;
             }
 
             // Last chunk will contains the usage information.
             if ($line['done'] === true) {
-                yield \json_encode(['usage' => [
-                    'input_tokens' => $line['prompt_eval_count'],
+                yield json_encode(['usage' => [
+                    'input_tokens'  => $line['prompt_eval_count'],
                     'output_tokens' => $line['eval_count'],
                 ]]);
                 continue;
@@ -64,13 +69,13 @@ trait HandleStream
             return null;
         }
 
-        $json = \json_decode($line, true);
+        $json = json_decode($line, true);
 
         if ($json['done']) {
             return null;
         }
 
-        if (! isset($json['message']) || $json['message']['role'] !== 'assistant') {
+        if (!isset($json['message']) || $json['message']['role'] !== 'assistant') {
             return null;
         }
 
@@ -81,7 +86,7 @@ trait HandleStream
     {
         $buffer = '';
 
-        while (! $stream->eof()) {
+        while (!$stream->eof()) {
             if ('' === ($byte = $stream->read(1))) {
                 return $buffer;
             }

@@ -6,6 +6,8 @@ use GuzzleHttp\Exception\GuzzleException;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Usage;
+use function array_key_exists;
+use function json_decode;
 
 trait HandleChat
 {
@@ -19,14 +21,14 @@ trait HandleChat
     {
         $json = [
             'contents' => $this->messageMapper()->map($messages),
-            ...$this->parameters
+            ...$this->parameters,
         ];
 
         if (isset($this->system)) {
             $json['system_instruction'] = [
                 'parts' => [
-                    ['text' => $this->system]
-                ]
+                    ['text' => $this->system],
+                ],
             ];
         }
 
@@ -34,21 +36,21 @@ trait HandleChat
             $json['tools'] = $this->generateToolsPayload();
         }
 
-        $result = $this->client->post(trim($this->baseUri, '/')."/{$this->model}:generateContent", compact('json'))
+        $result = $this->getClient()->post(trim($this->baseUri, '/') . "/{$this->model}:generateContent", compact('json'))
             ->getBody()->getContents();
 
-        $result = \json_decode($result, true);
+        $result = json_decode($result, true);
 
         $content = $result['candidates'][0]['content'];
 
-        if (\array_key_exists('functionCall', $content['parts'][0]) && !empty($content['parts'][0]['functionCall'])) {
+        if (array_key_exists('functionCall', $content['parts'][0]) && !empty($content['parts'][0]['functionCall'])) {
             $response = $this->createToolCallMessage($content);
         } else {
             $response = new Message(MessageRole::from($content['role']), $content['parts'][0]['text'] ?? '');
         }
 
         // Attach the usage for the current interaction
-        if (\array_key_exists('usageMetadata', $result)) {
+        if (array_key_exists('usageMetadata', $result)) {
             $response->setUsage(
                 new Usage(
                     $result['usageMetadata']['promptTokenCount'],

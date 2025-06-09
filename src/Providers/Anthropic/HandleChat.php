@@ -6,6 +6,9 @@ use GuzzleHttp\Exception\GuzzleException;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Usage;
+use function array_key_exists;
+use function end;
+use function json_decode;
 
 trait HandleChat
 {
@@ -18,9 +21,9 @@ trait HandleChat
     public function chat(array $messages): Message
     {
         $json = [
-            'model' => $this->model,
+            'model'      => $this->model,
             'max_tokens' => $this->max_tokens,
-            'messages' => $this->messageMapper()->map($messages),
+            'messages'   => $this->messageMapper()->map($messages),
             ...$this->parameters,
         ];
 
@@ -33,12 +36,12 @@ trait HandleChat
         }
 
         // https://docs.anthropic.com/claude/reference/messages_post
-        $result = $this->client->post('messages', compact('json'))
+        $result = $this->getClient()->post('messages', compact('json'))
             ->getBody()->getContents();
 
-        $result = \json_decode($result, true);
+        $result = json_decode($result, true);
 
-        $content = \end($result['content']);
+        $content = end($result['content']);
 
         if ($content['type'] === 'tool_use') {
             $response = $this->createToolCallMessage($content);
@@ -47,7 +50,7 @@ trait HandleChat
         }
 
         // Attach the usage for the current interaction
-        if (\array_key_exists('usage', $result)) {
+        if (array_key_exists('usage', $result)) {
             $response->setUsage(
                 new Usage(
                     $result['usage']['input_tokens'],

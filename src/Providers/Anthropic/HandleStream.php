@@ -2,9 +2,21 @@
 
 namespace NeuronAI\Providers\Anthropic;
 
+use Generator;
 use GuzzleHttp\Exception\GuzzleException;
 use NeuronAI\Exceptions\ProviderException;
 use Psr\Http\Message\StreamInterface;
+use Throwable;
+use function array_key_exists;
+use function array_map;
+use function compact;
+use function end;
+use function json_decode;
+use function json_encode;
+use function str_starts_with;
+use function strlen;
+use function substr;
+use function trim;
 
 trait HandleStream
 {
@@ -14,14 +26,14 @@ trait HandleStream
      * @throws ProviderException
      * @throws GuzzleException
      */
-    public function stream(array|string $messages, callable $executeToolsCallback): \Generator
+    public function stream(array|string $messages, callable $executeToolsCallback): Generator
     {
         $json = [
-            'stream' => true,
-            'model' => $this->model,
+            'stream'     => true,
+            'model'      => $this->model,
             'max_tokens' => $this->max_tokens,
-            'system' => $this->system ?? null,
-            'messages' => $this->messageMapper()->map($messages),
+            'system'     => $this->system ?? null,
+            'messages'   => $this->messageMapper()->map($messages),
             ...$this->parameters,
         ];
 
@@ -30,26 +42,26 @@ trait HandleStream
         }
 
         // https://docs.anthropic.com/claude/reference/messages_post
-        $stream = $this->client->post('messages', [
+        $stream = $this->getClient()->post('messages', [
             'stream' => true,
-            ...\compact('json')
+            ...compact('json'),
         ])->getBody();
 
         $toolCalls = [];
 
-        while (! $stream->eof()) {
+        while (!$stream->eof()) {
             if (!$line = $this->parseNextDataLine($stream)) {
                 continue;
             }
 
             // https://docs.anthropic.com/en/api/messages-streaming
             if ($line['type'] === 'message_start') {
-                yield \json_encode(['usage' => $line['message']['usage']]);
+                yield json_encode(['usage' => $line['message']['usage']]);
                 continue;
             }
 
             if ($line['type'] === 'message_delta') {
-                yield \json_encode(['usage' => $line['usage']]);
+                yield json_encode(['usage' => $line['usage']]);
                 continue;
             }
 
@@ -65,13 +77,14 @@ trait HandleStream
             // Handle tool call
             if ($line['type'] === 'content_block_stop' && !empty($toolCalls)) {
                 // Restore the input field as an array
-                $toolCalls = \array_map(function (array $call) {
-                    $call['input'] = \json_decode($call['input'], true);
+                $toolCalls = array_map(function (array $call) {
+                    $call['input'] = json_decode($call['input'], true);
+
                     return $call;
                 }, $toolCalls);
 
                 yield from $executeToolsCallback(
-                    $this->createToolCallMessage(\end($toolCalls))
+                    $this->createToolCallMessage(end($toolCalls))
                 );
             }
 
@@ -85,17 +98,17 @@ trait HandleStream
     /**
      * Recreate the tool_call format of anthropic API from streaming.
      *
-     * @param  array<string, mixed>  $line
-     * @param  array<int, array<string, mixed>>  $toolCalls
+     * @param array<string, mixed>             $line
+     * @param array<int, array<string, mixed>> $toolCalls
      * @return array<int, array<string, mixed>>
      */
     protected function composeToolCalls(array $line, array $toolCalls): array
     {
-        if (!\array_key_exists($line['index'], $toolCalls)) {
+        if (!array_key_exists($line['index'], $toolCalls)) {
             $toolCalls[$line['index']] = [
-                'type' => 'tool_use',
-                'id' => $line['content_block']['id'],
-                'name' => $line['content_block']['name'],
+                'type'  => 'tool_use',
+                'id'    => $line['content_block']['id'],
+                'name'  => $line['content_block']['name'],
                 'input' => '',
             ];
         } else {
@@ -111,16 +124,16 @@ trait HandleStream
     {
         $line = $this->readLine($stream);
 
-        if (! \str_starts_with($line, 'data:')) {
+        if (!str_starts_with($line, 'data:')) {
             return null;
         }
 
-        $line = \trim(\substr($line, \strlen('data: ')));
+        $line = trim(substr($line, strlen('data: ')));
 
         try {
-            return \json_decode($line, true, flags: JSON_THROW_ON_ERROR);
-        } catch (\Throwable $exception) {
-            throw new ProviderException('Anthropic streaming error - '.$exception->getMessage());
+            return json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+        } catch (Throwable $exception) {
+            throw new ProviderException('Anthropic streaming error - ' . $exception->getMessage());
         }
     }
 
@@ -128,7 +141,7 @@ trait HandleStream
     {
         $buffer = '';
 
-        while (! $stream->eof()) {
+        while (!$stream->eof()) {
             $byte = $stream->read(1);
 
             if ($byte === '') {

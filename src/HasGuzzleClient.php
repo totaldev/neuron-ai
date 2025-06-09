@@ -8,9 +8,21 @@ trait HasGuzzleClient
 {
     protected Client $client;
 
-    public function setClient(Client $client): mixed
+    abstract public function initClient(): Client;
+
+    public function getClient(): Client
+    {
+        if (!isset($this->client)) {
+            $this->client = $this->initClient();
+        }
+
+        return $this->client;
+    }
+
+    public function setClient(Client $client): static
     {
         $this->client = $client;
+
         return $this;
     }
 }
