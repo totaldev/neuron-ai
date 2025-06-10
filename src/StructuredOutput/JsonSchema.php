@@ -166,7 +166,7 @@ class JsonSchema
             $docComment = $property->getDocComment();
             if ($docComment) {
                 // Extract type from @var array<Type>
-                preg_match('/@var\s+array<([^>]*)>/', $docComment, $matches);
+                preg_match('/@var\s+([a-zA-Z_\\\\]+)\[\]/', $docComment, $matches);
 
                 if (isset($matches[1])) {
                     $itemType = trim($matches[1]);

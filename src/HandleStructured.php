@@ -16,13 +16,10 @@ use NeuronAI\Observability\Events\InferenceStop;
 use NeuronAI\Exceptions\AgentException;
 use NeuronAI\Observability\Events\Validated;
 use NeuronAI\Observability\Events\Validating;
-use NeuronAI\StructuredOutput\Deserializer;
+use NeuronAI\StructuredOutput\Deserializer\Deserializer;
 use NeuronAI\StructuredOutput\JsonExtractor;
 use NeuronAI\StructuredOutput\JsonSchema;
-use Symfony\Component\Validator\ConstraintViolation;
-use Symfony\Component\Validator\Mapping\Loader\AnnotationLoader;
-use Symfony\Component\Validator\Mapping\Loader\AttributeLoader;
-use Symfony\Component\Validator\Validation;
+use NeuronAI\StructuredOutput\Validation\Validator;
 
 trait HandleStructured
 {
@@ -42,6 +39,8 @@ trait HandleStructured
         $this->notify('structured-start');
 
         $this->fillChatHistory($messages);
+
+        $tools = $this->bootstrapTools();
 
         // Get the JSON schema from the response model
         $class ??= $this->getOutputClass();
@@ -69,7 +68,7 @@ trait HandleStructured
                 );
                 $response = $this->resolveProvider()
                     ->systemPrompt($this->instructions())
-                    ->setTools($this->tools())
+                    ->setTools($tools)
                     ->structured($messages, $class, $schema);
                 $this->notify(
                     'inference-stop',
@@ -119,26 +118,18 @@ trait HandleStructured
 
         // Deserialize the JSON response from the LLM into an instance of the response model
         $this->notify('structured-deserializing', new Deserializing($class));
-        $obj = (new Deserializer())->fromJson($json, $class);
+        $obj = Deserializer::fromJson($json, $class);
         $this->notify('structured-deserialized', new Deserialized($class));
 
         // Validate if the object fields respect the validation attributes
         // https://symfony.com/doc/current/validation.html#constraints
         $this->notify('structured-validating', new Validating($class, $json));
-        $loader = class_exists(AnnotationLoader::class) ? new AnnotationLoader() : new AttributeLoader();
-        $violations = Validation::createValidatorBuilder()
-            ->addLoader($loader)
-            ->getValidator()
-            ->validate($obj);
 
-        if ($violations->count() > 0) {
-            $errorMessages = [];
-            /** @var ConstraintViolation $violation */
-            foreach ($violations as $violation) {
-                $errorMessages[] = $violation->getPropertyPath().': '.$violation->getMessage();
-            }
-            $this->notify('structured-validated', new Validated($class, $json, $errorMessages));
-            throw new AgentException(PHP_EOL.'- '.implode(PHP_EOL.'- ', $errorMessages));
+        $violations = Validator::validate($obj);
+
+        if (\count($violations) > 0) {
+            $this->notify('structured-validated', new Validated($class, $json, $violations));
+            throw new AgentException(PHP_EOL.'- '.implode(PHP_EOL.'- ', $violations));
         }
         $this->notify('structured-validated', new Validated($class, $json));
 

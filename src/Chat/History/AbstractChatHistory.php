@@ -111,16 +111,16 @@ abstract class AbstractChatHistory implements ChatHistoryInterface
         return $this->getMessages();
     }
 
-    protected function unserializeMessages(array $messages): array
+    protected function deserializeMessages(array $messages): array
     {
         return \array_map(fn (array $message) => match ($message['type'] ?? null) {
-            'tool_call' => $this->unserializeToolCall($message),
-            'tool_call_result' => $this->unserializeToolCallResult($message),
-            default => $this->unserializeMessage($message),
+            'tool_call' => $this->deserializeToolCall($message),
+            'tool_call_result' => $this->deserializeToolCallResult($message),
+            default => $this->deserializeMessage($message),
         }, $messages);
     }
 
-    protected function unserializeMessage(array $message): Message
+    protected function deserializeMessage(array $message): Message
     {
         $messageRole = MessageRole::from($message['role']);
         $messageContent = $message['content'] ?? null;
@@ -131,25 +131,25 @@ abstract class AbstractChatHistory implements ChatHistoryInterface
             default => new Message($messageRole, $messageContent)
         };
 
-        $this->unserializeMeta($message, $item);
+        $this->deserializeMeta($message, $item);
 
         return $item;
     }
 
-    protected function unserializeToolCall(array $message): ToolCallMessage
+    protected function deserializeToolCall(array $message): ToolCallMessage
     {
         $tools = \array_map(fn (array $tool) => Tool::make($tool['name'], $tool['description'])
             ->setInputs($tool['inputs'])
-            ->setCallId($tool['callId']), $message['tools']);
+            ->setCallId($tool['callId'] ?? null), $message['tools']);
 
         $item = new ToolCallMessage($message['content'], $tools);
 
-        $this->unserializeMeta($message, $item);
+        $this->deserializeMeta($message, $item);
 
         return $item;
     }
 
-    protected function unserializeToolCallResult(array $message): ToolCallResultMessage
+    protected function deserializeToolCallResult(array $message): ToolCallResultMessage
     {
         $tools = \array_map(fn (array $tool) => Tool::make($tool['name'], $tool['description'])
             ->setInputs($tool['inputs'])
@@ -164,7 +164,7 @@ abstract class AbstractChatHistory implements ChatHistoryInterface
      * @param Message $item
      * @return void
      */
-    protected function unserializeMeta(array $message, Message $item): void
+    protected function deserializeMeta(array $message, Message $item): void
     {
         foreach ($message as $key => $value) {
             if ($key === 'role' || $key === 'content') {

@@ -2,33 +2,31 @@
 
 namespace NeuronAI\Tests;
 
-use NeuronAI\StructuredOutput\Deserializer;
-use NeuronAI\Tests\Utils\Person;
-use NeuronAI\Tests\Utils\PersonWithAddress;
-use NeuronAI\Tests\Utils\PersonWithTags;
-use NeuronAI\Tests\Utils\Tag;
+use NeuronAI\StructuredOutput\Deserializer\Deserializer;
+use NeuronAI\Tests\stubs\Person;
+use NeuronAI\Tests\stubs\Tag;
 use PHPUnit\Framework\TestCase;
 
 class DeserializerTest extends TestCase
 {
-    public function test_deserialize()
+    public function test_person_deserializer()
     {
         $json = '{"firstName": "John", "lastName": "Doe"}';
 
-        $obj = (new Deserializer())->fromJson($json, Person::class);
+        $obj = Deserializer::fromJson($json, Person::class);
 
         $this->assertInstanceOf(Person::class, $obj);
         $this->assertEquals('John', $obj->firstName);
         $this->assertEquals('Doe', $obj->lastName);
     }
 
-    public function test_deserialize_nested_class()
+    public function test_person_with_address()
     {
         $json = '{"firstName": "John", "lastName": "Doe", "address": {"city": "Rome"}}';
 
-        $obj = (new Deserializer())->fromJson($json, PersonWithAddress::class);
+        $obj = Deserializer::fromJson($json, Person::class);
 
-        $this->assertInstanceOf(PersonWithAddress::class, $obj);
+        $this->assertInstanceOf(Person::class, $obj);
         $this->assertEquals('Rome', $obj->address->city);
     }
 
@@ -36,9 +34,9 @@ class DeserializerTest extends TestCase
     {
         $json = '{"firstName": "John", "lastName": "Doe", "tags": [{"name": "agent"}]}';
 
-        $obj = (new Deserializer())->fromJson($json, PersonWithTags::class);
+        $obj = Deserializer::fromJson($json, Person::class);
 
-        $this->assertInstanceOf(PersonWithTags::class, $obj);
+        $this->assertInstanceOf(Person::class, $obj);
         $this->assertInstanceOf(Tag::class, $obj->tags[0]);
         $this->assertEquals('agent', $obj->tags[0]->name);
     }

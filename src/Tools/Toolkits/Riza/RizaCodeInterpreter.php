@@ -4,8 +4,9 @@ namespace NeuronAI\Tools\Toolkits\Riza;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
-use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;
+use NeuronAI\Tools\Tool;
 
 class RizaCodeInterpreter extends Tool
 {
@@ -25,21 +26,21 @@ class RizaCodeInterpreter extends Tool
         $this->addProperty(
             new ToolProperty(
                 'code',
-                'string',
+                PropertyType::STRING,
                 'The code to execute.',
                 true,
             )
         )->addProperty(
             new ToolProperty(
                 'args',
-                'array',
+                PropertyType::ARRAY,
                 "List of command line arguments to pass to the script (List of strings).",
                 false,
             )
         )->addProperty(
             new ToolProperty(
                 'env',
-                'array',
+                PropertyType::ARRAY,
                 "Set of key-value pairs to add to the script's execution environment.",
                 false,
             )

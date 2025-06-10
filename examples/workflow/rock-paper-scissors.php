@@ -21,8 +21,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
+use Inspector\Configuration;
+use Inspector\Inspector;
 use NeuronAI\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Exceptions\StateGraphError;
+use NeuronAI\Observability\AgentMonitoring;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Workflow\AgentNode;
@@ -31,12 +35,24 @@ use NeuronAI\Workflow\Workflow;
 
 // ----- OPENAI provider
 // $provider = new OpenAI(
-//     key: 'YOUR-OPENAI-API-KEY',      // TODO: adapt to match your OpenAI API key
+//     key: 'OPENAI-API-KEY',      // TODO: adapt to match your OpenAI API key
 //     model: 'gpt-4o',
 // );
 
+// ----- ANTHROPIC provider
+// $provider = new Anthropic(
+//     key: 'ANTHROPIC-API-KEY',      // TODO: adapt to match your Anthropic API key
+//     model: 'claude-3-7-sonnet-latest',
+// );
+
+// ----- GEMINI provider
+// $provider = new Gemini(
+//     key: 'GEMINI-API-KEY',      // TODO: adapt to match your Gemini API key
+//     model: 'gemini-2.0-flash',
+// );
+
 // ----- OLLAMA provider
-// $provider = new \NeuronAI\Providers\Ollama\Ollama(
+// $provider = new Ollama(
 //     url: 'http://localhost:11434/api',  // TODO: adapt to match your Ollama server URL
 //     model: 'qwen2.5:3b',                // TODO: Adapt to match your Ollama model
 // );
@@ -90,19 +106,19 @@ $determineWinnerTool = Tool::make('determine_winner', 'Determine the winner of r
 
 // Create agent for Player 1
 $player1Agent = Agent::make()
-    ->withProvider($provider)
+    ->setAiProvider($provider)
     ->withInstructions('You are Player 1 in a rock-paper-scissors game. Generate a choice.')
     ->addTool($makeChoiceTool);
 
 // Create agent for Player 2
 $player2Agent = Agent::make()
-    ->withProvider($provider)
+    ->setAiProvider($provider)
     ->withInstructions('You are Player 2 in a rock-paper-scissors game. Generate a choice.')
     ->addTool($makeChoiceTool);
 
 // Create agent for determining the winner
 $determineWinnerAgent = Agent::make()
-    ->withProvider($provider)
+    ->setAiProvider($provider)
     ->withInstructions('You determine the winner of a rock-paper-scissors game.')
     ->addTool($determineWinnerTool);
 
@@ -118,11 +134,19 @@ try {
         ->addEdge('determine_winner', StateGraph::END_NODE);
 
     // Create the workflow agent and process the game
-    $workflowAgent = Workflow::make($graph);
-    $reply = $workflowAgent->execute(new UserMessage("Determine the winner."));
+    $workflow = Workflow::make($graph);
+
+    // Get an Inspector ingestion key: https://inspector.dev
+    /*$workflow->observe(
+        new AgentMonitoring(
+            new Inspector(new Configuration('INSPECTOR_INGESTION_KEY'))
+        )
+    );*/
+
+    $reply = $workflow->execute(new UserMessage("Determine the winner."));
 
     echo "Game Result:\n";
     echo $reply->getContent() . "\n";
-} catch (\NeuronAI\Exceptions\StateGraphError $e) {
+} catch (StateGraphError $e) {
     echo "Something went wrong: {$e->getMessage()}\n";
 }

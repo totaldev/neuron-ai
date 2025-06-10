@@ -16,10 +16,37 @@ class McpClient
         if (\array_key_exists('command', $config)) {
             $this->transport = new StdioTransport($config);
             $this->transport->connect();
+            $this->initialize();
         } else {
             // todo: implement support for SSE with URL config property
-            throw new \Exception('Transport not supported!');
+            throw new McpException('Transport not supported!');
         }
+    }
+
+    protected function initialize()
+    {
+        $request = [
+            "jsonrpc" => "2.0",
+            "id"      => ++$this->requestId,
+            "method"  => "initialize",
+            "params"  => [
+                'protocolVersion' => '2024-11-05',
+                'capabilities'    => (object)[
+                    'sampling' => new \stdClass(),
+                ],
+                'clientInfo'      => (object)[
+                    'name'    => 'neuron-ai',
+                    'version' => '1.0.0',
+                ],
+            ],
+        ];
+        $this->transport->send($request);
+        $this->transport->receive();
+        $request = [
+            "jsonrpc" => "2.0",
+            "method"  => "notifications/initialized",
+        ];
+        $this->transport->send($request);
     }
 
     /**

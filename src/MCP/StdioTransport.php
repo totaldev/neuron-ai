@@ -30,16 +30,16 @@ class StdioTransport implements McpTransportInterface
         $env = $this->config['env'] ?? [];
 
         // Merge current environment with provided environment variables
-        $fullEnv = array_merge(getenv(), $env);
+        $fullEnv = \array_merge(\getenv(), $env);
 
         // Build command with arguments
         $commandLine = $command;
         foreach ($args as $arg) {
-            $commandLine .= ' ' . escapeshellarg($arg);
+            $commandLine .= ' ' . \escapeshellarg($arg);
         }
 
         // Start the process
-        $this->process = proc_open(
+        $this->process = \proc_open(
             $commandLine,
             $descriptorSpec,
             $this->pipes,
@@ -47,19 +47,19 @@ class StdioTransport implements McpTransportInterface
             $fullEnv
         );
 
-        if (!is_resource($this->process)) {
-            throw new \Exception("Failed to start the MCP server process");
+        if (!\is_resource($this->process)) {
+            throw new McpException("Failed to start the MCP server process");
         }
 
         // Configure pipes for binary data
-        stream_set_write_buffer($this->pipes[0], 0);
-        stream_set_read_buffer($this->pipes[1], 0);
+        \stream_set_write_buffer($this->pipes[0], 0);
+        \stream_set_read_buffer($this->pipes[1], 0);
 
         // Check that process started successfully
-        $status = proc_get_status($this->process);
+        $status = \proc_get_status($this->process);
         if (!$status['running']) {
-            $error = stream_get_contents($this->pipes[2]);
-            throw new \Exception("Process failed to start: " . $error);
+            $error = \stream_get_contents($this->pipes[2]);
+            throw new McpException("Process failed to start: " . $error);
         }
     }
 
@@ -68,26 +68,26 @@ class StdioTransport implements McpTransportInterface
      */
     public function send($data): void
     {
-        if (!is_resource($this->process)) {
-            throw new \Exception("Process is not running");
+        if (!\is_resource($this->process)) {
+            throw new McpException("Process is not running");
         }
 
-        $status = proc_get_status($this->process);
+        $status = \proc_get_status($this->process);
         if (!$status['running']) {
-            throw new \Exception("MCP server process is not running");
+            throw new McpException("MCP server process is not running");
         }
 
-        $jsonData = json_encode($data);
+        $jsonData = \json_encode($data);
         if ($jsonData === false) {
-            throw new \Exception("Failed to encode request data to JSON");
+            throw new McpException("Failed to encode request data to JSON");
         }
 
-        $bytesWritten = fwrite($this->pipes[0], $jsonData . "\n");
-        if ($bytesWritten === false || $bytesWritten < strlen($jsonData) + 1) {
-            throw new \Exception("Failed to write complete request to MCP server");
+        $bytesWritten = \fwrite($this->pipes[0], $jsonData . "\n");
+        if ($bytesWritten === false || $bytesWritten < \strlen($jsonData) + 1) {
+            throw new McpException("Failed to write complete request to MCP server");
         }
 
-        fflush($this->pipes[0]);
+        \fflush($this->pipes[0]);
     }
 
     /**
@@ -95,30 +95,31 @@ class StdioTransport implements McpTransportInterface
      */
     public function receive(): array
     {
-        if (!is_resource($this->process)) {
-            throw new \Exception("Process is not running");
+        if (!\is_resource($this->process)) {
+            throw new McpException("Process is not running");
         }
 
         // Set stream to non-blocking mode
-        stream_set_blocking($this->pipes[1], false);
+        \stream_set_blocking($this->pipes[1], false);
 
         $response = "";
-        $startTime = time();
-        $timeout = 30; // 30 seconds timeout
+        $startTime = \time();
+        $timeout = 30; // 30-second timeout
 
         // Keep reading until we get a complete JSON response or timeout
-        while (time() - $startTime < $timeout) {
-            $status = proc_get_status($this->process);
+        while (\time() - $startTime < $timeout) {
+            $status = \proc_get_status($this->process);
+
             if (!$status['running']) {
-                throw new \Exception("MCP server process has terminated unexpectedly");
+                throw new McpException("MCP server process has terminated unexpectedly");
             }
 
-            $chunk = fread($this->pipes[1], 4096);
+            $chunk = \fread($this->pipes[1], 4096);
             if ($chunk !== false && strlen($chunk) > 0) {
                 $response .= $chunk;
 
                 // Try to parse what we have so far
-                $decoded = json_decode($response, true);
+                $decoded = \json_decode($response, true);
                 if ($decoded !== null) {
                     // We've got a valid JSON response
                     return $decoded;
@@ -126,10 +127,10 @@ class StdioTransport implements McpTransportInterface
             }
 
             // Small delay to prevent CPU spinning
-            usleep(10000); // 10ms
+            \usleep(10000); // 10ms
         }
 
-        throw new \Exception("Timeout waiting for response from MCP server");
+        throw new McpException("Timeout waiting for response from MCP server");
     }
 
     /**
@@ -137,28 +138,28 @@ class StdioTransport implements McpTransportInterface
      */
     public function disconnect(): void
     {
-        if (is_resource($this->process)) {
+        if (\is_resource($this->process)) {
             // Close all pipe handles
             foreach ($this->pipes as $pipe) {
-                if (is_resource($pipe)) {
-                    fclose($pipe);
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
                 }
             }
 
             // Try graceful termination first
-            $status = proc_get_status($this->process);
+            $status = \proc_get_status($this->process);
             if ($status['running']) {
                 // On Unix systems, try sending SIGTERM
-                if (function_exists('proc_terminate')) {
-                    proc_terminate($this->process);
+                if (\function_exists('proc_terminate')) {
+                    \proc_terminate($this->process);
 
                     // Give the process a moment to shut down gracefully
-                    usleep(500000); // 500ms
+                    \usleep(500000); // 500ms
                 }
             }
 
             // Close the process handle
-            proc_close($this->process);
+            \proc_close($this->process);
             $this->process = null;
         }
     }

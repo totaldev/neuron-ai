@@ -1,0 +1,37 @@
+<?php
+
+namespace NeuronAI\Tools\Toolkits\MySQL;
+
+use NeuronAI\Tools\PropertyType;
+use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolProperty;
+use PDO;
+
+class MySQLWriteTool extends Tool
+{
+    public function __construct(protected PDO $pdo)
+    {
+        parent::__construct(
+            'execute_write_query',
+            'Use this tool to perform write operations against the MySQL database (INSERT, UPDATE, DELETE).'
+        );
+
+        $this->addProperty(
+            new ToolProperty(
+                'query',
+                PropertyType::STRING,
+                'The write query you want to run against the MySQL database (INSERT, UPDATE, DELETE).',
+                true
+            )
+        )->setCallable($this);
+    }
+
+    public function __invoke(string $query)
+    {
+        $result = $this->pdo->prepare($query)->execute();
+
+        return $result
+            ? "The query has been executed successfully."
+            : "I'm sorry, there was an error executing the query.";
+    }
+}

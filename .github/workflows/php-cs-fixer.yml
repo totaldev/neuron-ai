@@ -2,9 +2,11 @@ name: PHP CS Fixer
 
 on:
     push:
+        branches: ["main"]
         paths:
             - '**.php'
     pull_request:
+        branches: ["main"]
         paths:
             - '**.php'
 

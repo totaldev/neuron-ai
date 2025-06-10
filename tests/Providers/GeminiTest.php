@@ -12,6 +12,9 @@ use NeuronAI\Chat\Attachments\Image;
 use NeuronAI\Chat\Enums\AttachmentContentType;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\Gemini\Gemini;
+use NeuronAI\Tools\PropertyType;
+use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolProperty;
 use PHPUnit\Framework\TestCase;
 
 class GeminiTest extends TestCase
@@ -238,5 +241,70 @@ class GeminiTest extends TestCase
 
         $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
+    }
+
+    public function test_tools_payload()
+    {
+        $sentRequests = [];
+        $history = Middleware::history($sentRequests);
+        $mockHandler = new MockHandler([
+            new Response(status: 200, body: $this->body),
+        ]);
+        $stack = HandlerStack::create($mockHandler);
+        $stack->push($history);
+
+        $client = new Client(['handler' => $stack]);
+
+        $provider = (new Gemini('', 'gemini-2.0-flash'))
+            ->setTools([
+                Tool::make('tool', 'description')
+                    ->addProperty(
+                        new ToolProperty(
+                            'prop',
+                            PropertyType::STRING,
+                            'description',
+                            true
+                        )
+                    )
+            ])
+            ->setClient($client);
+
+        $response = $provider->chat([new UserMessage('Hi')]);
+
+        // Ensure we sent one request
+        $this->assertCount(1, $sentRequests);
+        $request = $sentRequests[0];
+
+        // Ensure we have sent the expected request payload.
+        $expectedRequest = [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => [
+                        ['text' => 'Hi'],
+                    ],
+                ],
+            ],
+            'tools' => [
+                'functionDeclarations' => [
+                    [
+                        'name' => 'tool',
+                        'description' => 'description',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'prop' => [
+                                    'type' => 'string',
+                                    'description' => 'description',
+                                ]
+                            ],
+                            'required' => ['prop'],
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
     }
 }

@@ -4,8 +4,9 @@ namespace NeuronAI\Tools;
 
 use NeuronAI\Exceptions\MissingCallbackParameter;
 use NeuronAI\Exceptions\ToolCallableNotSet;
-use NeuronAI\Exceptions\ToolException;
 use NeuronAI\StaticConstructor;
+use NeuronAI\StructuredOutput\Deserializer\Deserializer;
+use NeuronAI\StructuredOutput\Deserializer\DeserializerException;
 
 class Tool implements ToolInterface
 {
@@ -14,7 +15,7 @@ class Tool implements ToolInterface
     /**
      * The list of callback function arguments.
      *
-     * @var array<ToolProperty>
+     * @var array<ToolPropertyInterface>
      */
     protected array $properties = [];
 
@@ -66,7 +67,7 @@ class Tool implements ToolInterface
         return $this->description;
     }
 
-    public function addProperty(ToolProperty $property): ToolInterface
+    public function addProperty(ToolPropertyInterface $property): ToolInterface
     {
         $this->properties[] = $property;
         return $this;
@@ -79,7 +80,7 @@ class Tool implements ToolInterface
 
     public function getRequiredProperties(): array
     {
-        return \array_reduce($this->properties, function ($carry, ToolProperty $property) {
+        return \array_reduce($this->properties, function ($carry, ToolPropertyInterface $property) {
             if ($property->isRequired()) {
                 $carry[] = $property->getName();
             }
@@ -105,12 +106,12 @@ class Tool implements ToolInterface
         return $this;
     }
 
-    public function getCallId(): string
+    public function getCallId(): ?string
     {
         return $this->callId;
     }
 
-    public function setCallId(string $callId): self
+    public function setCallId(?string $callId): self
     {
         $this->callId = $callId;
         return $this;
@@ -131,23 +132,49 @@ class Tool implements ToolInterface
      * Execute the client side function.
      *
      * @throws MissingCallbackParameter
-     * @throws ToolCallableNotSet|ToolException
+     * @throws ToolCallableNotSet
+     * @throws DeserializerException
+     * @throws \ReflectionException
      */
     public function execute(): void
     {
         if (!is_callable($this->callback)) {
-            throw new ToolCallableNotSet('No callback defined for execution.');
+            throw new ToolCallableNotSet('No function defined for tool execution.');
         }
 
         // Validate required parameters
         foreach ($this->properties as $property) {
-            if ($property->isRequired() && ! \array_key_exists($property->getName(), $this->getInputs())) {
+            if ($property->isRequired() && !\array_key_exists($property->getName(), $this->getInputs())) {
                 throw new MissingCallbackParameter("Missing required parameter: {$property->getName()}");
             }
         }
 
+        // If there is an object property with class definition, deserialize the tool input into class instances
+        $parameters = array_map(function (ToolPropertyInterface $property) {
+            // Find the corresponding input
+            $inputs = $this->getInputs()[$property->getName()];
+
+            if ($property instanceof ObjectProperty && $property->getClass()) {
+                return Deserializer::fromJson(\json_encode($inputs), $property->getClass());
+            }
+
+            if ($property instanceof ArrayProperty) {
+                $items = $property->getItems();
+                if ($items instanceof ObjectProperty && $items->getClass()) {
+                    $class = $items->getClass();
+
+                    return array_map(function ($input) use ($class) {
+                        return Deserializer::fromJson(\json_encode($input), $class);
+                    }, $inputs);
+                }
+            }
+
+            // No extra treatments for basic property types
+            return $inputs;
+        }, $this->properties);
+
         $this->setResult(
-            \call_user_func($this->callback, ...$this->getInputs())
+            \call_user_func($this->callback, ...$parameters)
         );
     }
 

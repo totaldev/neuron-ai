@@ -6,6 +6,10 @@ namespace NeuronAI\Workflow;
 
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Exceptions\StateGraphError;
+use NeuronAI\Observability\Events\WorkflowEnd;
+use NeuronAI\Observability\Events\WorkflowNodeEnd;
+use NeuronAI\Observability\Events\WorkflowNodeStart;
+use NeuronAI\Observability\Events\WorkflowStart;
 use NeuronAI\Observability\Observable;
 use NeuronAI\StaticConstructor;
 use SplSubject;
@@ -37,23 +41,27 @@ class Workflow implements SplSubject
     {
         $lastReply = null;
 
-        $this->notify('workflow-start');
+        $this->notify('workflow-start', new WorkflowStart($this->executionList));
 
         foreach ($this->graph->getNodeNames() as $node) {
             $this->replies[$node] = [];
         }
 
-        foreach ($this->executionList as $node) {
-            $agent = $this->graph->getNode($node);
-            $input = $this->getPayload($node, $messages);
+        foreach ($this->executionList as $item) {
+            $node = $this->graph->getNode($item);
+            $input = $this->getPayload($item, $messages);
 
-            $this->attachObservers($agent);
+            $this->attachObservers($node);
 
-            $lastReply = $agent->execute($input);
-            $this->replies[$node] = [$lastReply];
+            $this->notify('workflow-node-start', new WorkflowNodeStart($item, $input));
+
+            $lastReply = $node->execute($input);
+            $this->replies[$item] = [$lastReply];
+
+            $this->notify('workflow-node-end', new WorkflowNodeEnd($item, $lastReply));
         }
 
-        $this->notify('workflow-end');
+        $this->notify('workflow-end', new WorkflowEnd($lastReply));
 
         return $lastReply;
     }

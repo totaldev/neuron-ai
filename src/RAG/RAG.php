@@ -57,16 +57,9 @@ class RAG extends Agent
 
     protected function retrieval(Message $question): void
     {
-        $this->notify('rag-vectorstore-searching', new VectorStoreSearching($question));
-        $documents = $this->searchDocuments($question->getContent());
-        $this->notify('rag-vectorstore-result', new VectorStoreResult($question, $documents));
-
-        $documents = $this->applyPostProcessors($question, $documents);
-
-        $originalInstructions = $this->instructions();
-        $this->notify('rag-instructions-changing', new InstructionsChanging($originalInstructions));
-        $this->setSystemMessage($documents);
-        $this->notify('rag-instructions-changed', new InstructionsChanged($originalInstructions, $this->instructions()));
+        $this->withDocumentsContext(
+            $this->retrieveDocuments($question)
+        );
     }
 
     /**
@@ -75,15 +68,31 @@ class RAG extends Agent
      * @param array<Document> $documents
      * @return AgentInterface
      */
+    public function withDocumentsContext(array $documents): AgentInterface
+    {
+        $originalInstructions = $this->instructions();
+        $this->notify('rag-instructions-changing', new InstructionsChanging($originalInstructions));
+
+        // Remove the old context to avoid infinite grow
+        $newInstructions = $this->removeDelimitedContent($originalInstructions, '<EXTRA-CONTEXT>', '</EXTRA-CONTEXT>');
+
+        $newInstructions .= '<EXTRA-CONTEXT>';
+        foreach ($documents as $document) {
+            $newInstructions .= $document->content.PHP_EOL.PHP_EOL;
+        }
+        $newInstructions .= '</EXTRA-CONTEXT>';
+
+        $this->withInstructions(\trim($newInstructions));
+        $this->notify('rag-instructions-changed', new InstructionsChanged($originalInstructions, $this->instructions()));
+
+        return $this;
+    }
+
+    /**
+     * @deprecated Use withDocumentsContext instead.
+     */
     protected function setSystemMessage(array $documents): AgentInterface
     {
-        $context = '';
-        foreach ($documents as $document) {
-            $context .= $document->content . ' ';
-        }
-
-        return $this->withInstructions(
-            $this->instructions() . PHP_EOL . PHP_EOL . "# EXTRA INFORMATION AND CONTEXT" . PHP_EOL . $context
-        );
+        return $this->withDocumentsContext($documents);
     }
 }

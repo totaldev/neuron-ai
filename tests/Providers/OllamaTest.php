@@ -12,6 +12,9 @@ use NeuronAI\Chat\Enums\AttachmentContentType;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\Ollama\Ollama;
+use NeuronAI\Tools\PropertyType;
+use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolProperty;
 use PHPUnit\Framework\TestCase;
 
 class OllamaTest extends TestCase
@@ -122,5 +125,72 @@ class OllamaTest extends TestCase
 
         $this->expectException(ProviderException::class);
         $provider->chat([$message]);
+    }
+
+    public function test_tools_payload()
+    {
+        $sentRequests = [];
+        $history = Middleware::history($sentRequests);
+        $mockHandler = new MockHandler([
+            new Response(status: 200, body: $this->body),
+        ]);
+        $stack = HandlerStack::create($mockHandler);
+        $stack->push($history);
+
+        $client = new Client(['handler' => $stack]);
+
+        $provider = (new Ollama(
+            url: '',
+            model: 'llama3.2',
+        ))->setTools([
+            Tool::make('tool', 'description')
+                ->addProperty(
+                    new ToolProperty(
+                        'prop',
+                        PropertyType::STRING,
+                        'description',
+                        true
+                    )
+                )
+        ])->setClient($client);
+
+        $response = $provider->chat([new UserMessage('Hi')]);
+
+        // Ensure we sent one request
+        $this->assertCount(1, $sentRequests);
+        $request = $sentRequests[0];
+
+        // Ensure we have sent the expected request payload.
+        $expectedRequest = [
+            'stream' => false,
+            'model' => 'llama3.2',
+            'messages' => [
+                [
+                    'role' => 'user',
+                    'content' => 'Hi',
+                ],
+            ],
+            'tools' => [
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'tool',
+                        'description' => 'description',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'prop' => [
+                                    'type' => 'string',
+                                    'description' => 'description',
+                                ]
+                            ],
+                            'required' => ['prop'],
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
     }
 }

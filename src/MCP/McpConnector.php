@@ -3,9 +3,10 @@
 namespace NeuronAI\MCP;
 
 use NeuronAI\StaticConstructor;
+use NeuronAI\Tools\PropertyType;
+use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolInterface;
-use NeuronAI\Tools\ToolProperty;
 
 class McpConnector
 {
@@ -41,6 +42,11 @@ class McpConnector
             description: $item['description'] ?? ''
         )->setCallable(function (...$arguments) use ($item) {
             $response = call_user_func($this->client->callTool(...), $item['name'], $arguments);
+
+            if (\array_key_exists('error', $response)) {
+                throw new McpException($response['error']['message']);
+            }
+
             $response = $response['result']['content'][0];
 
             if ($response['type'] === 'text') {
@@ -51,18 +57,30 @@ class McpConnector
                 return $response;
             }
 
-            throw new \Exception("Tool response format not supported: {$response['type']}");
+            throw new McpException("Tool response format not supported: {$response['type']}");
         });
 
         foreach ($item['inputSchema']['properties'] as $name => $input) {
-            $tool->addProperty(
-                new ToolProperty(
-                    $name,
-                    $input['type'],
-                    $input['description'] ?? '',
-                    \in_array($name, $item['inputSchema']['required'] ?? [])
-                )
+            $required = \in_array($name, $item['inputSchema']['required'] ?? []);
+            $types = \is_array($input['type']) ? $input['type'] : [$input['type']];
+
+            foreach ($types as $type) {
+                try {
+                    $type = PropertyType::from($type);
+                    break;
+                } catch (\Throwable $e) {
+                }
+            }
+
+            $property = new ToolProperty(
+                name: $name,
+                type: $type ?? PropertyType::STRING,
+                description: $input['description'] ?? '',
+                required: $required,
+                enum: $input['items']['enum'] ?? []
             );
+
+            $tool->addProperty($property);
         }
 
         return $tool;
