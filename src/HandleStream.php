@@ -2,6 +2,7 @@
 
 namespace NeuronAI;
 
+use Generator;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
@@ -10,10 +11,14 @@ use NeuronAI\Exceptions\AgentException;
 use NeuronAI\Observability\Events\AgentError;
 use NeuronAI\Observability\Events\MessageSaved;
 use NeuronAI\Observability\Events\MessageSaving;
+use Throwable;
 
 trait HandleStream
 {
-    public function stream(Message|array $messages): \Generator
+    /**
+     * @throws AgentException
+     */
+    public function stream(Message|array $messages): Generator
     {
         try {
             $this->notify('stream-start');
@@ -35,8 +40,8 @@ trait HandleStream
             $usage = new Usage(0, 0);
             foreach ($stream as $text) {
                 // Catch usage when streaming
-                $decoded = \json_decode($text, true);
-                if (\is_array($decoded) && \array_key_exists('usage', $decoded)) {
+                $decoded = json_decode($text, true);
+                if (is_array($decoded) && array_key_exists('usage', $decoded)) {
                     $usage->inputTokens += $decoded['usage']['input_tokens'] ?? 0;
                     $usage->outputTokens += $decoded['usage']['output_tokens'] ?? 0;
                     continue;
@@ -58,7 +63,7 @@ trait HandleStream
             }
 
             $this->notify('stream-stop');
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             $this->notify('error', new AgentError($exception));
             throw new AgentException($exception->getMessage(), $exception->getCode(), $exception);
         }

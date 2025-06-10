@@ -4,6 +4,7 @@ namespace NeuronAI;
 
 use NeuronAI\Exceptions\AgentException;
 use NeuronAI\Tools\ToolInterface;
+use function is_array;
 
 trait ResolveTools
 {
@@ -15,13 +16,24 @@ trait ResolveTools
     protected array $tools = [];
 
     /**
-     * Get the list of tools.
+     * Add tools.
      *
-     * @return array<ToolInterface>
+     * @param ToolInterface|array $tool
+     * @return AgentInterface
+     * @throws AgentException
      */
-    protected function tools(): array
+    public function addTool(ToolInterface|array $tool): AgentInterface
     {
-        return $this->tools;
+        $tool = is_array($tool) ? $tool : [$tool];
+
+        foreach ($tool as $t) {
+            if (!$t instanceof ToolInterface) {
+                throw new AgentException('Tool must be an instance of ToolInterface');
+            }
+            $this->tools[] = $t;
+        }
+
+        return $this;
     }
 
     /**
@@ -35,22 +47,12 @@ trait ResolveTools
     }
 
     /**
-     * Add tools.
+     * Get the list of tools.
      *
-     * @param ToolInterface|array $tool
-     * @return AgentInterface
+     * @return array<ToolInterface>
      */
-    public function addTool(ToolInterface|array $tool): AgentInterface
+    protected function tools(): array
     {
-        $tool = \is_array($tool) ? $tool : [$tool];
-
-        foreach ($tool as $t) {
-            if (! $t instanceof ToolInterface) {
-                throw new AgentException('Tool must be an instance of ToolInterface');
-            }
-            $this->tools[] = $t;
-        }
-
-        return $this;
+        return $this->tools;
     }
 }

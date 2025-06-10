@@ -2,34 +2,26 @@
 
 namespace NeuronAI\Tools;
 
-class ToolProperty implements \JsonSerializable
+use JsonSerializable;
+
+class ToolProperty implements JsonSerializable
 {
     public function __construct(
-        protected string $name,
+        protected string       $name,
         protected string|array $type,
-        protected string $description,
-        protected bool $required = false,
-        protected array $enum = [],
-    ) {
+        protected string       $description,
+        protected bool         $required = false,
+        protected array        $enum = [],
+    ) {}
+
+    public function getDescription(): string
+    {
+        return $this->description;
     }
 
-    /**
-     * @return array
-     */
-    public function jsonSerialize(): array
+    public function getEnum(): array
     {
-        return [
-            'name' => $this->name,
-            'description' => $this->description,
-            'type' => $this->type,
-            'enum' => $this->enum,
-            'required' => $this->required,
-        ];
-    }
-
-    public function isRequired(): bool
-    {
-        return $this->required;
+        return $this->enum;
     }
 
     public function getName(): string
@@ -42,13 +34,22 @@ class ToolProperty implements \JsonSerializable
         return $this->type;
     }
 
-    public function getDescription(): string
+    public function isRequired(): bool
     {
-        return $this->description;
+        return $this->required;
     }
 
-    public function getEnum(): array
+    /**
+     * @return array
+     */
+    public function jsonSerialize(): array
     {
-        return $this->enum;
+        return [
+            'name'        => $this->name,
+            'description' => $this->description,
+            'type'        => $this->type,
+            'enum'        => $this->enum,
+            'required'    => $this->required,
+        ];
     }
 }
