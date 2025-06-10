@@ -5,12 +5,13 @@ namespace NeuronAI\Providers\OpenAI;
 use GuzzleHttp\Client;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
+use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\MessageMapperInterface;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\ToolPropertyInterface;
+use stdClass;
 
 class OpenAI implements AIProviderInterface
 {
@@ -28,6 +29,13 @@ class OpenAI implements AIProviderInterface
     protected string $baseUri = 'https://api.openai.com/v1';
 
     /**
+     * The component responsible for mapping the NeuronAI Message to the AI provider format.
+     *
+     * @var MessageMapperInterface
+     */
+    protected MessageMapperInterface $messageMapper;
+
+    /**
      * System instructions.
      * https://platform.openai.com/docs/api-reference/chat/create
      *
@@ -35,32 +43,22 @@ class OpenAI implements AIProviderInterface
      */
     protected ?string $system = null;
 
-    /**
-     * The component responsible for mapping the NeuronAI Message to the AI provider format.
-     *
-     * @var MessageMapperInterface
-     */
-    protected MessageMapperInterface $messageMapper;
-
     public function __construct(
         protected string $key,
         protected string $model,
-        protected array $parameters = [],
-    ) {
-        $this->client = new Client([
-            'base_uri' => trim($this->baseUri, '/').'/',
-            'headers' => [
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer ' . $this->key,
-            ]
-        ]);
-    }
+        protected array  $parameters = [],
+    ) {}
 
-    public function systemPrompt(?string $prompt): AIProviderInterface
+    public function initClient(): Client
     {
-        $this->system = $prompt;
-        return $this;
+        return new Client([
+            'base_uri' => trim($this->baseUri, '/') . '/',
+            'headers'  => [
+                'Accept'        => 'application/json',
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $this->key,
+            ],
+        ]);
     }
 
     public function messageMapper(): MessageMapperInterface
@@ -68,48 +66,23 @@ class OpenAI implements AIProviderInterface
         if (!isset($this->messageMapper)) {
             $this->messageMapper = new MessageMapper();
         }
+
         return $this->messageMapper;
     }
 
-    protected function generateToolsPayload(): array
+    public function systemPrompt(?string $prompt): AIProviderInterface
     {
-        return \array_map(function (ToolInterface $tool) {
-            $payload = [
-                'type' => 'function',
-                'function' => [
-                    'name' => $tool->getName(),
-                    'description' => $tool->getDescription(),
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => new \stdClass(),
-                        'required' => [],
-                    ],
-                ]
-            ];
+        $this->system = $prompt;
 
-            $properties = \array_reduce($tool->getProperties(), function (array $carry, ToolPropertyInterface $property) {
-                $carry[$property->getName()] = $property->getJsonSchema();
-                return $carry;
-            }, []);
-
-            if (!empty($properties)) {
-                $payload['function']['parameters'] = [
-                    'type' => 'object',
-                    'properties' => $properties,
-                    'required' => $tool->getRequiredProperties(),
-                ];
-            }
-
-            return $payload;
-        }, $this->tools);
+        return $this;
     }
 
     protected function createToolCallMessage(array $message): Message
     {
-        $tools = \array_map(
-            fn (array $item) => $this->findTool($item['function']['name'])
+        $tools = array_map(
+            fn(array $item) => $this->findTool($item['function']['name'])
                 ->setInputs(
-                    \json_decode($item['function']['arguments'], true)
+                    json_decode($item['function']['arguments'], true)
                 )
                 ->setCallId($item['id']),
             $message['tool_calls']
@@ -121,5 +94,39 @@ class OpenAI implements AIProviderInterface
         );
 
         return $result->addMetadata('tool_calls', $message['tool_calls']);
+    }
+
+    protected function generateToolsPayload(): array
+    {
+        return array_map(static function (ToolInterface $tool) {
+            $payload = [
+                'type'     => 'function',
+                'function' => [
+                    'name'        => $tool->getName(),
+                    'description' => $tool->getDescription(),
+                    'parameters'  => [
+                        'type'       => 'object',
+                        'properties' => new stdClass(),
+                        'required'   => [],
+                    ],
+                ],
+            ];
+
+            $properties = array_reduce($tool->getProperties(), static function (array $carry, ToolPropertyInterface $property) {
+                $carry[$property->getName()] = $property->getJsonSchema();
+
+                return $carry;
+            }, []);
+
+            if (!empty($properties)) {
+                $payload['function']['parameters'] = [
+                    'type'       => 'object',
+                    'properties' => $properties,
+                    'required'   => $tool->getRequiredProperties(),
+                ];
+            }
+
+            return $payload;
+        }, $this->tools);
     }
 }
