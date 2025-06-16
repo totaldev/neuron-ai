@@ -11,6 +11,8 @@ use NeuronAI\Observability\Events\InstructionsChanged;
 use NeuronAI\Observability\Events\InstructionsChanging;
 use NeuronAI\Exceptions\MissingCallbackParameter;
 use NeuronAI\Exceptions\ToolCallableNotSet;
+use NeuronAI\Observability\Events\VectorStoreResult;
+use NeuronAI\Observability\Events\VectorStoreSearching;
 use NeuronAI\Providers\AIProviderInterface;
 use Throwable;
 
@@ -40,6 +42,33 @@ class RAG extends Agent
     }
 
     /**
+     * Retrieve relevant documents from the vector store.
+     *
+     * @return Document[]
+     */
+    public function retrieveDocuments(Message $question): array
+    {
+        $this->notify('rag-vectorstore-searching', new VectorStoreSearching($question));
+
+        $documents = $this->resolveVectorStore()->similaritySearch(
+            $this->resolveEmbeddingsProvider()->embedText($question->getContent()),
+        );
+
+        $retrievedDocs = [];
+
+        foreach ($documents as $document) {
+            //md5 for removing duplicates
+            $retrievedDocs[md5($document->getContent())] = $document;
+        }
+
+        $retrievedDocs = array_values($retrievedDocs);
+
+        $this->notify('rag-vectorstore-result', new VectorStoreResult($question, $retrievedDocs));
+
+        return $this->applyPostProcessors($question, $retrievedDocs);
+    }
+
+    /**
      * @throws AgentException
      */
     public function streamAnswer(Message $question): Generator
@@ -51,13 +80,6 @@ class RAG extends Agent
         yield from $this->stream($question);
 
         $this->notify('rag-stop');
-    }
-
-    protected function retrieval(Message $question): void
-    {
-        $this->withDocumentsContext(
-            $this->retrieveDocuments($question)
-        );
     }
 
     /**
@@ -75,14 +97,21 @@ class RAG extends Agent
 
         $newInstructions .= '<EXTRA-CONTEXT>';
         foreach ($documents as $document) {
-            $newInstructions .= $document->getContent().PHP_EOL.PHP_EOL;
+            $newInstructions .= $document->getContent() . PHP_EOL . PHP_EOL;
         }
         $newInstructions .= '</EXTRA-CONTEXT>';
 
-        $this->withInstructions(\trim($newInstructions));
+        $this->withInstructions(trim($newInstructions));
         $this->notify('rag-instructions-changed', new InstructionsChanged($originalInstructions, $this->instructions()));
 
         return $this;
+    }
+
+    protected function retrieval(Message $question): void
+    {
+        $this->withDocumentsContext(
+            $this->retrieveDocuments($question)
+        );
     }
 
     /**

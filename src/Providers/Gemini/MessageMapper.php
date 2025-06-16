@@ -13,6 +13,8 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
 use NeuronAI\Tools\ToolInterface;
+use stdClass;
+use function array_map;
 
 class MessageMapper implements MessageMapperInterface
 {
@@ -27,19 +29,37 @@ class MessageMapper implements MessageMapperInterface
                 AssistantMessage::class => $this->mapMessage($message),
                 ToolCallMessage::class => $this->mapToolCall($message),
                 ToolCallResultMessage::class => $this->mapToolsResult($message),
-                default => throw new ProviderException('Could not map message type '.$message::class),
+                default => throw new ProviderException('Could not map message type ' . $message::class),
             };
         }
 
         return $this->mapping;
     }
 
+    protected function mapAttachment(Attachment $attachment): array
+    {
+        return match ($attachment->contentType) {
+            AttachmentContentType::URL => [
+                'file_data' => [
+                    'file_uri'  => $attachment->content,
+                    'mime_type' => $attachment->mediaType,
+                ],
+            ],
+            AttachmentContentType::BASE64 => [
+                'inline_data' => [
+                    'data'      => $attachment->content,
+                    'mime_type' => $attachment->mediaType,
+                ],
+            ]
+        };
+    }
+
     protected function mapMessage(Message $message): void
     {
         $payload = [
-            'role' => $message->getRole(),
+            'role'  => $message->getRole(),
             'parts' => [
-                ['text' => $message->getContent()]
+                ['text' => $message->getContent()],
             ],
         ];
 
@@ -52,48 +72,30 @@ class MessageMapper implements MessageMapperInterface
         $this->mapping[] = $payload;
     }
 
-    protected function mapAttachment(Attachment $attachment): array
-    {
-        return match($attachment->contentType) {
-            AttachmentContentType::URL => [
-                'file_data' => [
-                    'file_uri' => $attachment->content,
-                    'mime_type' => $attachment->mediaType,
-                ],
-            ],
-            AttachmentContentType::BASE64 => [
-                'inline_data' => [
-                    'data' => $attachment->content,
-                    'mime_type' => $attachment->mediaType,
-                ]
-            ]
-        };
-    }
-
     protected function mapToolCall(ToolCallMessage $message): void
     {
         $this->mapping[] = [
-            'role' => MessageRole::MODEL->value,
+            'role'  => MessageRole::MODEL->value,
             'parts' => [
-                ...\array_map(fn (ToolInterface $tool) => [
+                ...array_map(fn(ToolInterface $tool) => [
                     'functionCall' => [
                         'name' => $tool->getName(),
-                        'args' => $tool->getInputs() ?: new \stdClass(),
-                    ]
-                ], $message->getTools())
-            ]
+                        'args' => $tool->getInputs() ?: new stdClass(),
+                    ],
+                ], $message->getTools()),
+            ],
         ];
     }
 
     protected function mapToolsResult(ToolCallResultMessage $message): void
     {
         $this->mapping[] = [
-            'role' => MessageRole::USER->value,
-            'parts' => \array_map(fn (ToolInterface $tool) => [
+            'role'  => MessageRole::USER->value,
+            'parts' => array_map(fn(ToolInterface $tool) => [
                 'functionResponse' => [
-                    'name' => $tool->getName(),
+                    'name'     => $tool->getName(),
                     'response' => [
-                        'name' => $tool->getName(),
+                        'name'    => $tool->getName(),
                         'content' => $tool->getResult(),
                     ],
                 ],

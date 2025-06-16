@@ -8,6 +8,7 @@ use NeuronAI\Observability\Events\ToolCalled;
 use NeuronAI\Observability\Events\ToolCalling;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Observability\Observable;
+use Throwable;
 
 class Agent implements AgentInterface
 {
@@ -27,6 +28,26 @@ class Agent implements AgentInterface
      */
     protected string $instructions;
 
+    public function instructions(): string
+    {
+        return 'Your are a helpful and friendly AI agent built with Neuron AI PHP framework.';
+    }
+
+    public function resolveInstructions(): string
+    {
+        return $this->instructions ?? $this->instructions();
+    }
+
+    public function withInstructions(string $instructions): AgentInterface
+    {
+        $this->instructions = $instructions;
+
+        return $this;
+    }
+
+    /**
+     * @throws Throwable
+     */
     protected function executeTools(ToolCallMessage $toolCallMessage): ToolCallResultMessage
     {
         $toolCallResult = new ToolCallResultMessage($toolCallMessage->getTools());
@@ -35,7 +56,7 @@ class Agent implements AgentInterface
             $this->notify('tool-calling', new ToolCalling($tool));
             try {
                 $tool->execute();
-            } catch (\Throwable $exception) {
+            } catch (Throwable $exception) {
                 $this->notify('error', new AgentError($exception));
                 throw $exception;
             }
@@ -45,36 +66,16 @@ class Agent implements AgentInterface
         return $toolCallResult;
     }
 
-    public function withInstructions(string $instructions): AgentInterface
-    {
-        $this->instructions = $instructions;
-        return $this;
-    }
-
-    public function instructions(): string
-    {
-        return 'Your are a helpful and friendly AI agent built with Neuron AI PHP framework.';
-    }
-
-    public function resolveInstructions(): string
-    {
-        if (isset($this->instructions)) {
-            return $this->instructions;
-        }
-
-        return $this->instructions();
-    }
-
     protected function removeDelimitedContent(string $text, string $openTag, string $closeTag): string
     {
         // Escape special regex characters in the tags
-        $escapedOpenTag = \preg_quote($openTag, '/');
-        $escapedCloseTag = \preg_quote($closeTag, '/');
+        $escapedOpenTag = preg_quote($openTag, '/');
+        $escapedCloseTag = preg_quote($closeTag, '/');
 
         // Create the regex pattern to match content between tags
         $pattern = '/' . $escapedOpenTag . '.*?' . $escapedCloseTag . '/s';
 
         // Remove all occurrences of the delimited content
-        return \preg_replace($pattern, '', $text);
+        return preg_replace($pattern, '', $text);
     }
 }

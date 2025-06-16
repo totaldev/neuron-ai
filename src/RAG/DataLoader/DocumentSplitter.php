@@ -3,6 +3,16 @@
 namespace NeuronAI\RAG\DataLoader;
 
 use NeuronAI\RAG\Document;
+use function array_map;
+use function array_merge;
+use function array_slice;
+use function array_sum;
+use function count;
+use function explode;
+use function implode;
+use function min;
+use function strlen;
+use function trim;
 
 class DocumentSplitter
 {
@@ -17,11 +27,11 @@ class DocumentSplitter
             return [];
         }
 
-        if (\strlen($text) <= $maxLength) {
+        if (strlen($text) <= $maxLength) {
             return [$document];
         }
 
-        $parts = \explode($separator, $text);
+        $parts = explode($separator, $text);
 
         $chunks = self::createChunksWithOverlap($parts, $maxLength, $separator, $wordOverlap);
 
@@ -39,7 +49,7 @@ class DocumentSplitter
     }
 
     /**
-     * @param  Document[]  $documents
+     * @param Document[] $documents
      * @return Document[]
      */
     public static function splitDocuments(array $documents, int $maxLength = 1000, string $separator = '.', int $wordOverlap = 0): array
@@ -47,14 +57,22 @@ class DocumentSplitter
         $split = [];
 
         foreach ($documents as $document) {
-            $split = \array_merge($split, static::splitDocument($document, $maxLength, $separator, $wordOverlap));
+            $split = array_merge($split, static::splitDocument($document, $maxLength, $separator, $wordOverlap));
         }
 
         return $split;
     }
 
     /**
-     * @param  array<string>  $words
+     * @param array<string> $currentChunk
+     */
+    private static function calculateChunkLength(array $currentChunk, string $separator): int
+    {
+        return array_sum(array_map('strlen', $currentChunk)) + count($currentChunk) * strlen($separator) - 1;
+    }
+
+    /**
+     * @param array<string> $words
      * @return array<string>
      */
     private static function createChunksWithOverlap(array $words, int $maxLength, string $separator, int $wordOverlap): array
@@ -67,36 +85,28 @@ class DocumentSplitter
                 continue;
             }
 
-            if ($currentChunkLength + \strlen($separator.$word) <= $maxLength || $currentChunk === []) {
+            if ($currentChunkLength + strlen($separator . $word) <= $maxLength || $currentChunk === []) {
                 $currentChunk[] = $word;
                 $currentChunkLength = self::calculateChunkLength($currentChunk, $separator);
             } else {
                 // Add the chunk with overlap
-                $chunks[] = \implode($separator, $currentChunk);
+                $chunks[] = implode($separator, $currentChunk);
 
                 // Calculate overlap words
-                $calculatedOverlap = \min($wordOverlap, \count($currentChunk) - 1);
-                $overlapWords = $calculatedOverlap > 0 ? \array_slice($currentChunk, -$calculatedOverlap) : [];
+                $calculatedOverlap = min($wordOverlap, count($currentChunk) - 1);
+                $overlapWords = $calculatedOverlap > 0 ? array_slice($currentChunk, -$calculatedOverlap) : [];
 
                 // Start a new chunk with overlap words
                 $currentChunk = [...$overlapWords, $word];
-                $currentChunk[0] = \trim($currentChunk[0]);
+                $currentChunk[0] = trim($currentChunk[0]);
                 $currentChunkLength = self::calculateChunkLength($currentChunk, $separator);
             }
         }
 
         if ($currentChunk !== []) {
-            $chunks[] = \implode($separator, $currentChunk);
+            $chunks[] = implode($separator, $currentChunk);
         }
 
         return $chunks;
-    }
-
-    /**
-     * @param  array<string>  $currentChunk
-     */
-    private static function calculateChunkLength(array $currentChunk, string $separator): int
-    {
-        return \array_sum(\array_map('strlen', $currentChunk)) + \count($currentChunk) * \strlen($separator) - 1;
     }
 }

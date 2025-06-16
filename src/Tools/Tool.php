@@ -7,6 +7,8 @@ use NeuronAI\Exceptions\ToolCallableNotSet;
 use NeuronAI\StaticConstructor;
 use NeuronAI\StructuredOutput\Deserializer\Deserializer;
 use NeuronAI\StructuredOutput\Deserializer\DeserializerException;
+use ReflectionException;
+use stdClass;
 
 class Tool implements ToolInterface
 {
@@ -84,7 +86,7 @@ class Tool implements ToolInterface
 
         // If there is an object property with class definition, deserialize the tool input into class instances
         $parameters = array_map(function (ToolPropertyInterface $property) {
-            if (!\array_key_exists($property->getName(), $this->getInputs())) {
+            if (!array_key_exists($property->getName(), $this->getInputs())) {
                 return null;
             }
 
@@ -92,25 +94,23 @@ class Tool implements ToolInterface
             $inputs = $this->getInputs()[$property->getName()];
 
             if ($property instanceof ObjectProperty && $property->getClass()) {
-                // Use input directly without redundant JSON conversion
-                $parameters[$inputKey] = Deserializer::fromJson($input, $property->getClass());
-            } elseif ($property instanceof ArrayProperty) {
+                return Deserializer::fromJson(json_encode($inputs), $property->getClass());
+            }
+
+            if ($property instanceof ArrayProperty) {
                 $items = $property->getItems();
                 if ($items instanceof ObjectProperty && $items->getClass()) {
                     $class = $items->getClass();
-                    // Ensure inputs is an array
-                    $parameters[$inputKey] = array_map(static function ($input) use ($class) {
-                        return Deserializer::fromJson($input, $class);
-                    }, $input);
-                } else {
-                    // Handle basic array types by converting to a native array
-                    $parameters[$inputKey] = $input;
+
+                    return array_map(static function ($input) use ($class) {
+                        return Deserializer::fromJson(json_encode($input), $class);
+                    }, $inputs);
                 }
-            } else {
-                // Use input directly for basic property types
-                $parameters[$inputKey] = $input;
             }
-        }
+
+            // No extra treatments for basic property types
+            return $inputs;
+        }, $this->properties);
 
         $this->setResult(
             call_user_func($this->callback, ...$parameters)
@@ -158,7 +158,7 @@ class Tool implements ToolInterface
 
     public function getRequiredProperties(): array
     {
-        return array_reduce($this->properties, function ($carry, ToolPropertyInterface $property) {
+        return array_reduce($this->properties, static function ($carry, ToolPropertyInterface $property) {
             if ($property->isRequired()) {
                 $carry[] = $property->getName();
             }

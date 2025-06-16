@@ -5,6 +5,9 @@ namespace NeuronAI\RAG\VectorStore;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use NeuronAI\RAG\Document;
+use function array_map;
+use function in_array;
+use function json_decode;
 
 class PineconeVectorStore implements VectorStoreInterface
 {
@@ -20,20 +23,20 @@ class PineconeVectorStore implements VectorStoreInterface
     protected array $filters = [];
 
     public function __construct(
-        string $key,
+        string           $key,
         protected string $indexUrl,
-        protected int $topK = 4,
-        string $version = '2025-04',
+        protected int    $topK = 4,
+        string           $version = '2025-04',
         protected string $namespace = '__default__'
     ) {
         $this->client = new Client([
-            'base_uri' => trim($this->indexUrl, '/').'/',
-            'headers' => [
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-                'Api-Key' => $key,
+            'base_uri' => trim($this->indexUrl, '/') . '/',
+            'headers'  => [
+                'Accept'                 => 'application/json',
+                'Content-Type'           => 'application/json',
+                'Api-Key'                => $key,
                 'X-Pinecone-API-Version' => $version,
-            ]
+            ],
         ]);
     }
 
@@ -47,17 +50,17 @@ class PineconeVectorStore implements VectorStoreInterface
         $this->client->post("vectors/upsert", [
             RequestOptions::JSON => [
                 'namespace' => $this->namespace,
-                'vectors' => \array_map(fn (Document $document) => [
-                    'id' => $document->getId(),
-                    'values' => $document->getEmbedding(),
+                'vectors'   => array_map(fn(Document $document) => [
+                    'id'       => $document->getId(),
+                    'values'   => $document->getEmbedding(),
                     'metadata' => [
-                        'content' => $document->getContent(),
+                        'content'    => $document->getContent(),
                         'sourceType' => $document->getSourceType(),
                         'sourceName' => $document->getSourceName(),
                         ...$document->metadata,
                     ],
-                ], $documents)
-            ]
+                ], $documents),
+            ],
         ]);
     }
 
@@ -65,17 +68,17 @@ class PineconeVectorStore implements VectorStoreInterface
     {
         $result = $this->client->post("query", [
             RequestOptions::JSON => [
-                'namespace' => $this->namespace,
+                'namespace'       => $this->namespace,
                 'includeMetadata' => true,
-                'vector' => $embedding,
-                'topK' => $this->topK,
-                'filters' => $this->filters, // Hybrid search
-            ]
+                'vector'          => $embedding,
+                'topK'            => $this->topK,
+                'filters'         => $this->filters, // Hybrid search
+            ],
         ])->getBody()->getContents();
 
-        $result = \json_decode($result, true);
+        $result = json_decode($result, true);
 
-        return \array_map(function (array $item) {
+        return array_map(function (array $item) {
             $document = new Document();
             $document->id = $item['id'];
             $document->embedding = $item['values'];
@@ -85,7 +88,7 @@ class PineconeVectorStore implements VectorStoreInterface
             $document->score = $item['score'];
 
             foreach ($item['metadata'] as $name => $value) {
-                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                if (!in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
                     $document->addMetadata($name, $value);
                 }
             }
@@ -97,6 +100,7 @@ class PineconeVectorStore implements VectorStoreInterface
     public function withFilters(array $filters): self
     {
         $this->filters = $filters;
+
         return $this;
     }
 }

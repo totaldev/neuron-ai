@@ -6,6 +6,10 @@ use NeuronAI\Exceptions\AgentException;
 use NeuronAI\Observability\Events\ToolsBootstrapped;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\Toolkits\ToolkitInterface;
+use ReflectionClass;
+use function array_map;
+use function array_merge;
+use function is_array;
 
 trait ResolveTools
 {
@@ -19,24 +23,27 @@ trait ResolveTools
     protected array $toolsBootstrapCache = [];
 
     /**
-     * Get the list of tools.
+     * Add tools.
      *
-     * @return ToolInterface[]
+     * @param ToolInterface|ToolkitInterface|array $tools
+     * @return AgentInterface
+     * @throws AgentException
      */
-    protected function tools(): array
+    public function addTool(ToolInterface|ToolkitInterface|array $tools): AgentInterface
     {
-        return [];
-    }
+        $tools = is_array($tools) ? $tools : [$tools];
 
-    /**
-     * @return ToolInterface[]
-     */
-    public function getTools(): array
-    {
-        $agentTools = $this->tools();
-        $runtimeTools = $this->tools;
+        foreach ($tools as $t) {
+            if (!$t instanceof ToolInterface && !$t instanceof ToolkitInterface) {
+                throw new AgentException('Tools must be an instance of ToolInterface or ToolkitInterface');
+            }
+            $this->tools[] = $t;
+        }
 
-        return \array_merge($runtimeTools, $agentTools);
+        // Empty the cache for the next turn.
+        $this->toolsBootstrapCache = [];
+
+        return $this;
     }
 
     /**
@@ -58,23 +65,23 @@ trait ResolveTools
         foreach ($this->getTools() as $tool) {
             if ($tool instanceof ToolkitInterface) {
                 if ($kitGuidelines = $tool->guidelines()) {
-                    $name = (new \ReflectionClass($tool))->getShortName();
-                    $kitGuidelines = '# '.$name.PHP_EOL.$kitGuidelines;
+                    $name = (new ReflectionClass($tool))->getShortName();
+                    $kitGuidelines = '# ' . $name . PHP_EOL . $kitGuidelines;
                 }
 
                 // Merge the tools
                 $innerTools = $tool->tools();
-                $this->toolsBootstrapCache = \array_merge($this->toolsBootstrapCache, $innerTools);
+                $this->toolsBootstrapCache = array_merge($this->toolsBootstrapCache, $innerTools);
 
                 // Add guidelines to the system prompt
                 if ($kitGuidelines) {
-                    $kitGuidelines .= PHP_EOL.implode(
-                        PHP_EOL.'- ',
-                        \array_map(
-                            fn ($tool) => "{$tool->getName()}: {$tool->getDescription()}",
-                            $innerTools
-                        )
-                    );
+                    $kitGuidelines .= PHP_EOL . implode(
+                            PHP_EOL . '- ',
+                            array_map(
+                                fn($tool) => "{$tool->getName()}: {$tool->getDescription()}",
+                                $innerTools
+                            )
+                        );
 
                     $guidelines[] = $kitGuidelines;
                 }
@@ -87,7 +94,7 @@ trait ResolveTools
         if (!empty($guidelines)) {
             $instructions = $this->removeDelimitedContent($this->instructions(), '<TOOLS-GUIDELINES>', '</TOOLS-GUIDELINES>');
             $this->withInstructions(
-                $instructions.PHP_EOL.'<TOOLS-GUIDELINES>'.PHP_EOL.implode(PHP_EOL.PHP_EOL, $guidelines).PHP_EOL.'</TOOLS-GUIDELINES>'
+                $instructions . PHP_EOL . '<TOOLS-GUIDELINES>' . PHP_EOL . implode(PHP_EOL . PHP_EOL, $guidelines) . PHP_EOL . '</TOOLS-GUIDELINES>'
             );
         }
 
@@ -97,26 +104,23 @@ trait ResolveTools
     }
 
     /**
-     * Add tools.
-     *
-     * @param ToolInterface|ToolkitInterface|array $tools
-     * @return AgentInterface
-     * @throws AgentException
+     * @return ToolInterface[]
      */
-    public function addTool(ToolInterface|ToolkitInterface|array $tools): AgentInterface
+    public function getTools(): array
     {
-        $tools = \is_array($tools) ? $tools : [$tools];
+        $agentTools = $this->tools();
+        $runtimeTools = $this->tools;
 
-        foreach ($tools as $t) {
-            if (! $t instanceof ToolInterface && ! $t instanceof ToolkitInterface) {
-                throw new AgentException('Tools must be an instance of ToolInterface or ToolkitInterface');
-            }
-            $this->tools[] = $t;
-        }
+        return array_merge($runtimeTools, $agentTools);
+    }
 
-        // Empty the cache for the next turn.
-        $this->toolsBootstrapCache = [];
-
-        return $this;
+    /**
+     * Get the list of tools.
+     *
+     * @return ToolInterface[]
+     */
+    protected function tools(): array
+    {
+        return [];
     }
 }

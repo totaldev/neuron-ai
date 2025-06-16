@@ -6,6 +6,9 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\RequestOptions;
 use NeuronAI\RAG\Document;
+use function array_map;
+use function in_array;
+use function json_decode;
 
 class QdrantVectorStore implements VectorStoreInterface
 {
@@ -14,14 +17,14 @@ class QdrantVectorStore implements VectorStoreInterface
     public function __construct(
         protected string $collectionUrl, // like http://localhost:6333/collections/neuron-ai/
         protected string $key,
-        protected int $topK = 4,
+        protected int    $topK = 4,
     ) {
         $this->client = new Client([
-            'base_uri' => trim($this->collectionUrl, '/').'/',
-            'headers' => [
+            'base_uri' => trim($this->collectionUrl, '/') . '/',
+            'headers'  => [
                 'Content-Type' => 'application/json',
-                'api-key' => $this->key,
-            ]
+                'api-key'      => $this->key,
+            ],
         ]);
     }
 
@@ -31,17 +34,17 @@ class QdrantVectorStore implements VectorStoreInterface
             RequestOptions::JSON => [
                 'points' => [
                     [
-                        'id' => $document->getId(),
+                        'id'      => $document->getId(),
                         'payload' => [
-                            'content' => $document->getContent(),
+                            'content'    => $document->getContent(),
                             'sourceType' => $document->getSourceType(),
                             'sourceName' => $document->getSourceName(),
-                            'metadata' => $document->metadata,
+                            'metadata'   => $document->metadata,
                         ],
-                        'vector' => $document->getEmbedding(),
-                    ]
-                ]
-            ]
+                        'vector'  => $document->getEmbedding(),
+                    ],
+                ],
+            ],
         ]);
     }
 
@@ -54,23 +57,23 @@ class QdrantVectorStore implements VectorStoreInterface
      */
     public function addDocuments(array $documents): void
     {
-        $points = \array_map(fn ($document) => [
-            'id' => $document->getId(),
+        $points = array_map(fn($document) => [
+            'id'      => $document->getId(),
             'payload' => [
-                'content' => $document->getContent(),
+                'content'    => $document->getContent(),
                 'sourceType' => $document->getSourceType(),
                 'sourceName' => $document->getSourceName(),
                 ...$document->metadata,
             ],
-            'vector' => $document->getEmbedding(),
+            'vector'  => $document->getEmbedding(),
         ], $documents);
 
         $this->client->put('points', [
             RequestOptions::JSON => [
                 'operations' => [
-                    ['upsert' => compact('points')]
+                    ['upsert' => compact('points')],
                 ],
-            ]
+            ],
         ]);
     }
 
@@ -78,16 +81,16 @@ class QdrantVectorStore implements VectorStoreInterface
     {
         $response = $this->client->post('points/search', [
             RequestOptions::JSON => [
-                'vector' => $embedding,
-                'limit' => $this->topK,
+                'vector'       => $embedding,
+                'limit'        => $this->topK,
                 'with_payload' => true,
-                'with_vector' => true,
-            ]
+                'with_vector'  => true,
+            ],
         ])->getBody()->getContents();
 
-        $response = \json_decode($response, true);
+        $response = json_decode($response, true);
 
-        return \array_map(function (array $item) {
+        return array_map(function (array $item) {
             $document = new Document($item['payload']['content']);
             $document->id = $item['id'];
             $document->embedding = $item['vector'];
@@ -96,7 +99,7 @@ class QdrantVectorStore implements VectorStoreInterface
             $document->score = $item['score'];
 
             foreach ($item['payload'] as $name => $value) {
-                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                if (!in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
                     $document->addMetadata($name, $value);
                 }
             }

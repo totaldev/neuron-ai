@@ -6,22 +6,22 @@ use GuzzleHttp\Client;
 
 class OpenAIEmbeddingsProvider extends AbstractEmbeddingsProvider
 {
-    protected Client $client;
-
     protected string $baseUri = 'https://api.openai.com/v1/embeddings';
+
+    protected Client $client;
 
     public function __construct(
         protected string $key,
         protected string $model,
-        protected int $dimensions = 1024
+        protected int    $dimensions = 1024
     ) {
         $this->client = new Client([
             'base_uri' => $this->baseUri,
-            'headers' => [
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
+            'headers'  => [
+                'Accept'        => 'application/json',
+                'Content-Type'  => 'application/json',
                 'Authorization' => 'Bearer ' . $this->key,
-            ]
+            ],
         ]);
     }
 
@@ -29,14 +29,14 @@ class OpenAIEmbeddingsProvider extends AbstractEmbeddingsProvider
     {
         $response = $this->client->post('', [
             'json' => [
-                'model' => $this->model,
-                'input' => $text,
+                'model'           => $this->model,
+                'input'           => $text,
                 'encoding_format' => 'float',
-                'dimensions' => $this->dimensions,
-            ]
+                'dimensions'      => $this->dimensions,
+            ],
         ]);
 
-        $response = \json_decode($response->getBody()->getContents(), true);
+        $response = json_decode($response->getBody()->getContents(), true, JSON_UNESCAPED_UNICODE);
 
         return $response['data'][0]['embedding'];
     }

@@ -2,29 +2,35 @@
 
 namespace NeuronAI\RAG;
 
-class Document implements \JsonSerializable
+use JsonSerializable;
+
+class Document implements JsonSerializable
 {
-    public string|int $id;
+    public int $chunkNumber = 0;
 
     public array $embedding = [];
 
-    public string $sourceType = 'manual';
+    public ?string $hash = null;
 
-    public string $sourceName = 'manual';
-
-    public float $score = 0;
+    public string|int $id;
 
     public array $metadata = [];
 
+    public float $score = 0;
+
+    public string $sourceName = 'manual';
+
+    public string $sourceType = 'manual';
+
     public function __construct(
         public string $content = '',
-    ) {
-        $this->id = \uniqid();
-    }
+    ) {}
 
-    public function getId(): string|int
+    public function addMetadata(string $key, string|int $value): Document
     {
-        return $this->id;
+        $this->metadata[$key] = $value;
+
+        return $this;
     }
 
     public function getContent(): string
@@ -37,14 +43,9 @@ class Document implements \JsonSerializable
         return $this->embedding;
     }
 
-    public function getSourceType(): string
+    public function getId(): string|int
     {
-        return $this->sourceType;
-    }
-
-    public function getSourceName(): string
-    {
-        return $this->sourceName;
+        return $this->id;
     }
 
     public function getScore(): float
@@ -55,25 +56,32 @@ class Document implements \JsonSerializable
     public function setScore(float $score): Document
     {
         $this->score = $score;
+
         return $this;
     }
 
-    public function addMetadata(string $key, string|int $value): Document
+    public function getSourceName(): string
     {
-        $this->metadata[$key] = $value;
-        return $this;
+        return $this->sourceName;
+    }
+
+    public function getSourceType(): string
+    {
+        return $this->sourceType;
     }
 
     public function jsonSerialize(): array
     {
         return [
-            'id' => $this->getId(),
-            'content' => $this->getContent(),
-            'embedding' => $this->getEmbedding(),
-            'sourceType' => $this->getSourceType(),
-            'sourceName' => $this->getSourceName(),
-            'score' => $this->getScore(),
-            'metadata' => $this->metadata,
+            'id'          => $this->getId(),
+            'embedding'   => $this->getEmbedding(),
+            'content'     => $this->getContent(),
+            'chunkNumber' => $this->chunkNumber,
+            'hash'        => $this->hash,
+            'metadata'    => $this->metadata,
+            'sourceType'  => $this->getSourceType(),
+            'sourceName'  => $this->getSourceName(),
+            'score'       => $this->getScore(),
         ];
     }
 }

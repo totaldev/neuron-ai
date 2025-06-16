@@ -5,6 +5,10 @@ namespace NeuronAI\RAG\VectorStore;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use NeuronAI\RAG\Document;
+use function count;
+use function in_array;
+use function json_decode;
+use function uniqid;
 
 class ChromaVectorStore implements VectorStoreInterface
 {
@@ -13,22 +17,8 @@ class ChromaVectorStore implements VectorStoreInterface
     public function __construct(
         protected string $collection,
         protected string $host = 'http://localhost:8000',
-        protected int $topK = 5,
-    ) {
-    }
-
-    protected function getClient(): Client
-    {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-        return $this->client = new Client([
-            'base_uri' => trim($this->host, '/')."/api/v1/collections/{$this->collection}/",
-            'headers' => [
-                'Content-Type' => 'application/json',
-            ]
-        ]);
-    }
+        protected int    $topK = 5,
+    ) {}
 
     public function addDocument(Document $document): void
     {
@@ -47,18 +37,18 @@ class ChromaVectorStore implements VectorStoreInterface
         $response = $this->getClient()->post('query', [
             RequestOptions::JSON => [
                 'queryEmbeddings' => $embedding,
-                'nResults' => $this->topK,
-            ]
+                'nResults'        => $this->topK,
+            ],
         ])->getBody()->getContents();
 
-        $response = \json_decode($response, true);
+        $response = json_decode($response, true);
 
         // Map the result
-        $size = \count($response['distances']);
+        $size = count($response['distances']);
         $result = [];
         for ($i = 0; $i < $size; $i++) {
             $document = new Document();
-            $document->id = $response['ids'][$i] ?? \uniqid();
+            $document->id = $response['ids'][$i] ?? uniqid();
             $document->embedding = $response['embeddings'][$i];
             $document->content = $response['documents'][$i];
             $document->sourceType = $response['metadatas'][$i]['sourceType'] ?? null;
@@ -66,7 +56,7 @@ class ChromaVectorStore implements VectorStoreInterface
             $document->score = $response['distances'][$i];
 
             foreach ($response['metadatas'][$i] as $name => $value) {
-                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                if (!in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
                     $document->addMetadata($name, $value);
                 }
             }
@@ -77,6 +67,20 @@ class ChromaVectorStore implements VectorStoreInterface
         return $result;
     }
 
+    protected function getClient(): Client
+    {
+        if (isset($this->client)) {
+            return $this->client;
+        }
+
+        return $this->client = new Client([
+            'base_uri' => trim($this->host, '/') . "/api/v1/collections/{$this->collection}/",
+            'headers'  => [
+                'Content-Type' => 'application/json',
+            ],
+        ]);
+    }
+
     /**
      * @param Document[] $documents
      * @return array
@@ -84,10 +88,10 @@ class ChromaVectorStore implements VectorStoreInterface
     protected function mapDocuments(array $documents): array
     {
         $payload = [
-            'ids' => [],
-            'documents' => [],
+            'ids'        => [],
+            'documents'  => [],
             'embeddings' => [],
-            'metadatas' => [],
+            'metadatas'  => [],
 
         ];
         foreach ($documents as $document) {
