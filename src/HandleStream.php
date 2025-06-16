@@ -28,7 +28,7 @@ trait HandleStream
             $tools = $this->bootstrapTools();
 
             $stream = $this->resolveProvider()
-                ->systemPrompt($this->instructions())
+                ->systemPrompt($this->resolveInstructions())
                 ->setTools($tools)
                 ->stream(
                     $this->resolveChatHistory()->getMessages(),

@@ -13,13 +13,12 @@ class DataLoaderTest extends TestCase
     {
         $documents = StringDataLoader::for('test')->getDocuments();
         $this->assertCount(1, $documents);
-        $this->assertEquals('test', $documents[0]->content);
-        $this->assertEquals(\hash('sha256', 'test'), $documents[0]->hash);
+        $this->assertEquals('test', $documents[0]->getContent());
     }
 
     public function test_split_long_text()
     {
-        $doc = new Document(file_get_contents(__DIR__.'/stubs/long-text.txt'));
+        $doc = new Document(file_get_contents(__DIR__ . '/Stubs/long-text.txt'));
 
         $documents = DocumentSplitter::splitDocument($doc);
         $this->assertCount(7, $documents);

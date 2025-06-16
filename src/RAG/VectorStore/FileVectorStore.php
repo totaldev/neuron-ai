@@ -57,7 +57,7 @@ class FileVectorStore implements VectorStoreInterface
             }
         }
 
-        return \array_reduce($topItems, function ($carry, $item) {
+        return \array_map(function ($item) {
             $itemDoc = $item['document'];
             $document = new Document($itemDoc['content']);
             $document->embedding = $itemDoc['embedding'];
@@ -65,9 +65,10 @@ class FileVectorStore implements VectorStoreInterface
             $document->sourceName = $itemDoc['sourceName'];
             $document->id = $itemDoc['id'];
             $document->score = 1 - $item['dist'];
-            $carry[] = $document;
-            return $carry;
-        }, []);
+            $document->metadata = $itemDoc['metadata'] ?? [];
+
+            return $document;
+        }, $topItems);
     }
 
 
@@ -76,11 +77,11 @@ class FileVectorStore implements VectorStoreInterface
         return SimilaritySearch::cosine($vector1, $vector2);
     }
 
-    protected function appendToFile(array $vectors): void
+    protected function appendToFile(array $documents): void
     {
         \file_put_contents(
             $this->getFilePath(),
-            implode(PHP_EOL, \array_map(fn (array $vector) => \json_encode($vector), $vectors)).PHP_EOL,
+            implode(PHP_EOL, \array_map(fn (array $vector) => \json_encode($vector), $documents)).PHP_EOL,
             FILE_APPEND
         );
     }

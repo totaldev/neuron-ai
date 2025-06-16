@@ -40,7 +40,7 @@ class TypesenseTest extends TestCase
         ]);
 
         // embedding "Hello World!"
-        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../stubs/hello-world.embeddings'), true);
+        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
     }
 
     public function test_typesense_instance(): void
@@ -51,15 +51,17 @@ class TypesenseTest extends TestCase
 
     public function test_add_document_and_search(): void
     {
-        $this->expectNotToPerformAssertions();
         $store = new TypesenseVectorStore($this->client, 'test', $this->vectorDimension);
 
         $document = new Document('Hello World!');
+        $document->addMetadata('customProperty', 'customValue');
         $document->embedding = $this->embedding;
-        $document->hash = \hash('sha256', 'Hello World!' . time()); // added time() to avoid exception 'A document with id x already exists'
 
         $store->addDocument($document);
 
         $results = $store->similaritySearch($this->embedding);
+
+        $this->assertEquals($document->getContent(), $results[0]->getContent());
+        $this->assertEquals($document->metadata['customProperty'], $results[0]->metadata['customProperty']);
     }
 }

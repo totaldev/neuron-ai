@@ -4,7 +4,7 @@ namespace NeuronAI\Tests;
 
 use NeuronAI\StructuredOutput\JsonSchema;
 use NeuronAI\StructuredOutput\SchemaProperty;
-use NeuronAI\Tests\stubs\Person;
+use NeuronAI\Tests\Stubs\Person;
 use PHPUnit\Framework\TestCase;
 
 class JsonSchemaTest extends TestCase

@@ -7,8 +7,6 @@ use NeuronAI\Exceptions\ToolCallableNotSet;
 use NeuronAI\StaticConstructor;
 use NeuronAI\StructuredOutput\Deserializer\Deserializer;
 use NeuronAI\StructuredOutput\Deserializer\DeserializerException;
-use ReflectionException;
-use stdClass;
 
 class Tool implements ToolInterface
 {
@@ -84,11 +82,14 @@ class Tool implements ToolInterface
             }
         }
 
-        // Build an associative array of parameters with property names
-        $parameters = [];
-        foreach ($this->properties as $property) {
-            $inputKey = $property->getName();
-            $input = $this->getInputs()[$inputKey] ?? null;
+        // If there is an object property with class definition, deserialize the tool input into class instances
+        $parameters = array_map(function (ToolPropertyInterface $property) {
+            if (!\array_key_exists($property->getName(), $this->getInputs())) {
+                return null;
+            }
+
+            // Find the corresponding input
+            $inputs = $this->getInputs()[$property->getName()];
 
             if ($property instanceof ObjectProperty && $property->getClass()) {
                 // Use input directly without redundant JSON conversion

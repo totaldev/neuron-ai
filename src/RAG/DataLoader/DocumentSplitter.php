@@ -7,24 +7,17 @@ use NeuronAI\RAG\Document;
 class DocumentSplitter
 {
     /**
-     * @return array<Document>
+     * @return Document[]
      */
     public static function splitDocument(Document $document, int $maxLength = 1000, string $separator = ' ', int $wordOverlap = 0): array
     {
-        $text = $document->content;
+        $text = $document->getContent();
 
         if (empty($text)) {
             return [];
         }
 
         if (\strlen($text) <= $maxLength) {
-            if (empty($document->hash)) {
-                $document->hash = \hash('sha256', $text);
-            }
-
-            if (empty($document->id)) {
-                $document->id = \uniqid();
-            }
             return [$document];
         }
 
@@ -33,15 +26,12 @@ class DocumentSplitter
         $chunks = self::createChunksWithOverlap($parts, $maxLength, $separator, $wordOverlap);
 
         $split = [];
-        $chunkNumber = 0;
+        //$chunkNumber = 0;
         foreach ($chunks as $chunk) {
             $newDocument = new Document($chunk);
-            $newDocument->hash = \hash('sha256', $chunk);
-            $newDocument->id = \uniqid();
-            $newDocument->sourceType = $document->sourceType;
-            $newDocument->sourceName = $document->sourceName;
-            $newDocument->chunkNumber = $chunkNumber;
-            $chunkNumber++;
+            $newDocument->sourceType = $document->getSourceType();
+            $newDocument->sourceName = $document->getSourceName();
+            //$chunkNumber++;
             $split[] = $newDocument;
         }
 
@@ -49,8 +39,8 @@ class DocumentSplitter
     }
 
     /**
-     * @param  array<Document>  $documents
-     * @return array<Document>
+     * @param  Document[]  $documents
+     * @return Document[]
      */
     public static function splitDocuments(array $documents, int $maxLength = 1000, string $separator = '.', int $wordOverlap = 0): array
     {

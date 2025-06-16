@@ -9,7 +9,7 @@ interface VectorStoreInterface
     public function addDocument(Document $document): void;
 
     /**
-     * @param  array<Document>  $documents
+     * @param  Document[]  $documents
      */
     public function addDocuments(array $documents): void;
 
@@ -17,7 +17,7 @@ interface VectorStoreInterface
      * Return docs most similar to the embedding.
      *
      * @param  float[]  $embedding
-     * @return array<Document>
+     * @return Document[]
      */
     public function similaritySearch(array $embedding): iterable;
 }

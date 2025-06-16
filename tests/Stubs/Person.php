@@ -1,6 +1,6 @@
 <?php
 
-namespace NeuronAI\Tests\stubs;
+namespace NeuronAI\Tests\Stubs;
 
 use NeuronAI\StructuredOutput\Validation\Rules\ArrayOf;
 use NeuronAI\StructuredOutput\Validation\Rules\NotBlank;
@@ -14,7 +14,7 @@ class Person
     public Address $address;
 
     /**
-     * @var \NeuronAI\Tests\stubs\Tag[]
+     * @var \NeuronAI\Tests\Stubs\Tag[]
      */
     #[ArrayOf(Tag::class, allowEmpty: true)]
     public array $tags;

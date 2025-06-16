@@ -25,26 +25,20 @@ class QdrantVectorStore implements VectorStoreInterface
         ]);
     }
 
-    /**
-     * Store a single document.
-     *
-     * @param Document $document
-     * @return void
-     * @throws GuzzleException
-     */
     public function addDocument(Document $document): void
     {
         $this->client->put('points', [
             RequestOptions::JSON => [
                 'points' => [
                     [
-                        'id' => $document->id,
+                        'id' => $document->getId(),
                         'payload' => [
-                            'content' => $document->content,
-                            'sourceType' => $document->sourceType,
-                            'sourceName' => $document->sourceName,
+                            'content' => $document->getContent(),
+                            'sourceType' => $document->getSourceType(),
+                            'sourceName' => $document->getSourceName(),
+                            'metadata' => $document->metadata,
                         ],
-                        'vector' => $document->embedding,
+                        'vector' => $document->getEmbedding(),
                     ]
                 ]
             ]
@@ -54,20 +48,21 @@ class QdrantVectorStore implements VectorStoreInterface
     /**
      * Bulk save documents.
      *
-     * @param array<Document> $documents
+     * @param Document[] $documents
      * @return void
      * @throws GuzzleException
      */
     public function addDocuments(array $documents): void
     {
         $points = \array_map(fn ($document) => [
-            'id' => $document->id,
+            'id' => $document->getId(),
             'payload' => [
-                'content' => $document->content,
-                'sourceType' => $document->sourceType,
-                'sourceName' => $document->sourceName,
+                'content' => $document->getContent(),
+                'sourceType' => $document->getSourceType(),
+                'sourceName' => $document->getSourceName(),
+                ...$document->metadata,
             ],
-            'vector' => $document->embedding,
+            'vector' => $document->getEmbedding(),
         ], $documents);
 
         $this->client->put('points', [
@@ -93,13 +88,19 @@ class QdrantVectorStore implements VectorStoreInterface
         $response = \json_decode($response, true);
 
         return \array_map(function (array $item) {
-            $document = new Document();
+            $document = new Document($item['payload']['content']);
             $document->id = $item['id'];
             $document->embedding = $item['vector'];
-            $document->content = $item['payload']['content'];
             $document->sourceType = $item['payload']['sourceType'];
             $document->sourceName = $item['payload']['sourceName'];
             $document->score = $item['score'];
+
+            foreach ($item['payload'] as $name => $value) {
+                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                    $document->addMetadata($name, $value);
+                }
+            }
+
             return $document;
         }, $response['result']);
     }

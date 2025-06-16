@@ -19,9 +19,10 @@
 
 **[Go to the official documentation](https://neuron.inspector.dev/)**
 
-## Forum
+## Guides & Tutorials
 
-You can post questions and feedback on the [Inspector Forum](https://github.com/inspector-apm/neuron-ai/discussions).
+Check out the technical guides and tutorials archive to learn how to start creating your AI Agents with Neuron
+https://docs.neuron-ai.dev/resources/guides-and-tutorials.
 
 ## Neuron AI Examples
 

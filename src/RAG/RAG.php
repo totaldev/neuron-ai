@@ -9,8 +9,6 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Exceptions\AgentException;
 use NeuronAI\Observability\Events\InstructionsChanged;
 use NeuronAI\Observability\Events\InstructionsChanging;
-use NeuronAI\Observability\Events\VectorStoreResult;
-use NeuronAI\Observability\Events\VectorStoreSearching;
 use NeuronAI\Exceptions\MissingCallbackParameter;
 use NeuronAI\Exceptions\ToolCallableNotSet;
 use NeuronAI\Providers\AIProviderInterface;
@@ -65,8 +63,7 @@ class RAG extends Agent
     /**
      * Set the system message based on the context.
      *
-     * @param array<Document> $documents
-     * @return AgentInterface
+     * @param Document[] $documents
      */
     public function withDocumentsContext(array $documents): AgentInterface
     {
@@ -78,7 +75,7 @@ class RAG extends Agent
 
         $newInstructions .= '<EXTRA-CONTEXT>';
         foreach ($documents as $document) {
-            $newInstructions .= $document->content.PHP_EOL.PHP_EOL;
+            $newInstructions .= $document->getContent().PHP_EOL.PHP_EOL;
         }
         $newInstructions .= '</EXTRA-CONTEXT>';
 

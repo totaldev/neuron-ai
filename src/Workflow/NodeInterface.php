@@ -2,10 +2,8 @@
 
 namespace NeuronAI\Workflow;
 
-use NeuronAI\Chat\Messages\Message;
-
-interface NodeInterface extends \SplSubject
+interface NodeInterface
 {
-    public function observe(\SplObserver $observer, string $event = "*"): self;
-    public function execute(Message|array $messages): Message;
+    public function run(WorkflowState $state): WorkflowState;
+    public function setContext(WorkflowContext $context): void;
 }

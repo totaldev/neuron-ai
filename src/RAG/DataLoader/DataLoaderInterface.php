@@ -7,7 +7,7 @@ use NeuronAI\RAG\Document;
 interface DataLoaderInterface
 {
     /**
-     * @return array<Document>
+     * @return Document[]
      */
     public function getDocuments(): array;
 }

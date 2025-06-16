@@ -1,6 +1,6 @@
 <?php
 
-namespace NeuronAI\Tests\stubs;
+namespace NeuronAI\Tests\Stubs;
 
 use NeuronAI\StructuredOutput\SchemaProperty;
 

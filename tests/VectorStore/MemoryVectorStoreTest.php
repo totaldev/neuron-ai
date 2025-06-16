@@ -14,7 +14,7 @@ class MemoryVectorStoreTest extends TestCase
     protected function setUp(): void
     {
         // embedding "Hello World!"
-        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../stubs/hello-world.embeddings'), true);
+        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
     }
 
     public function test_memory_store_instance()
@@ -28,7 +28,6 @@ class MemoryVectorStoreTest extends TestCase
         $this->expectNotToPerformAssertions();
         $document = new Document('Hello World!');
         $document->embedding = $this->embedding;
-        $document->hash = \hash('sha256', 'Hello World!' . time());
 
         $store = new MemoryVectorStore();
         $store->addDocument($document);
@@ -52,7 +51,22 @@ class MemoryVectorStoreTest extends TestCase
         $results = $vectorStore->similaritySearch([1, 0]);
 
         $this->assertCount(3, $results);
-        $this->assertGreaterThanOrEqual($results[1]->score, $results[0]->score);
-        $this->assertGreaterThanOrEqual($results[2]->score, $results[1]->score);
+        $this->assertGreaterThanOrEqual($results[1]->getScore(), $results[0]->getScore());
+        $this->assertGreaterThanOrEqual($results[2]->getScore(), $results[1]->getScore());
+    }
+
+    public function test_custom_document_model()
+    {
+        $document = new Document('Hello World!');
+        $document->addMetadata('customProperty', 'customValue');
+        $document->embedding = [1, 0];
+
+        $vectorStore = new MemoryVectorStore();
+        $vectorStore->addDocuments([$document]);
+
+        $results = $vectorStore->similaritySearch([1, 0]);
+
+        $this->assertCount(1, $results);
+        $this->assertEquals($document->metadata['customProperty'], $results[0]->metadata['customProperty']);
     }
 }

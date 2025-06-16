@@ -1,6 +1,6 @@
 <?php
 
-namespace NeuronAI\Tests\stubs;
+namespace NeuronAI\Tests\Stubs;
 
 use Doctrine\ORM\Mapping as ORM;
 use NeuronAI\RAG\VectorStore\Doctrine\DoctrineEmbeddingEntityBase;

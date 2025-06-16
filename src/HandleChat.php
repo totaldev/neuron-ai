@@ -40,7 +40,7 @@ trait HandleChat
         );
 
         return $this->resolveProvider()
-            ->systemPrompt($this->instructions())
+            ->systemPrompt($this->resolveInstructions())
             ->setTools($tools)
             ->chatAsync(
                 $this->resolveChatHistory()->getMessages()

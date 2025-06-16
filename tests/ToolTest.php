@@ -2,7 +2,7 @@
 
 namespace NeuronAI\Tests;
 
-use NeuronAI\Tests\stubs\Color;
+use NeuronAI\Tests\Stubs\Color;
 use NeuronAI\Tools\ObjectProperty;
 use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;

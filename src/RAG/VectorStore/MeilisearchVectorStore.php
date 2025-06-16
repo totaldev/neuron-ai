@@ -47,14 +47,14 @@ class MeilisearchVectorStore implements VectorStoreInterface
         $this->client->put('documents', [
             RequestOptions::JSON => \array_map(function (Document $document) {
                 return [
-                    'id' => $document->id,
-                    'hash' => $document->hash,
-                    'content' => $document->content,
-                    'sourceType' => $document->sourceType,
-                    'sourceName' => $document->sourceName,
+                    'id' => $document->getId(),
+                    'content' => $document->getContent(),
+                    'sourceType' => $document->getSourceType(),
+                    'sourceName' => $document->getSourceName(),
+                    ...$document->metadata,
                     '_vectors' => [
                         'default' => [
-                            'embeddings' => $document->embedding,
+                            'embeddings' => $document->getEmbedding(),
                             'regenerate' => false,
                         ],
                     ]
@@ -81,14 +81,19 @@ class MeilisearchVectorStore implements VectorStoreInterface
         $response = \json_decode($response, true);
 
         return \array_map(function (array $item) {
-            $document = new Document();
-            $document->id = $item['id'] ?? null;
-            $document->hash = $item['hash'] ?? null;
-            $document->content = $item['content'];
+            $document = new Document($item['content']);
+            $document->id = $item['id'] ?? \uniqid();
             $document->sourceType = $item['sourceType'] ?? null;
             $document->sourceName = $item['sourceName'] ?? null;
             $document->embedding = $item['_vectors']['default']['embeddings'];
             $document->score = $item['_rankingScore'];
+
+            foreach ($item as $name => $value) {
+                if (!\in_array($name, ['_vectors', '_rankingScore', 'content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                    $document->addMetadata($name, $value);
+                }
+            }
+
             return $document;
         }, $response['hits']);
     }

@@ -25,7 +25,7 @@ class Agent implements AgentInterface
      *
      * @var string
      */
-    protected string $instructions = 'Your are a helpful and friendly AI agent built with Neuron AI PHP framework.';
+    protected string $instructions;
 
     protected function executeTools(ToolCallMessage $toolCallMessage): ToolCallResultMessage
     {
@@ -53,7 +53,16 @@ class Agent implements AgentInterface
 
     public function instructions(): string
     {
-        return $this->instructions;
+        return 'Your are a helpful and friendly AI agent built with Neuron AI PHP framework.';
+    }
+
+    public function resolveInstructions(): string
+    {
+        if (isset($this->instructions)) {
+            return $this->instructions;
+        }
+
+        return $this->instructions();
     }
 
     protected function removeDelimitedContent(string $text, string $openTag, string $closeTag): string

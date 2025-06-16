@@ -67,7 +67,7 @@ trait HandleStructured
                     new InferenceStart($last)
                 );
                 $response = $this->resolveProvider()
-                    ->systemPrompt($this->instructions())
+                    ->systemPrompt($this->resolveInstructions())
                     ->setTools($tools)
                     ->structured($messages, $class, $schema);
                 $this->notify(

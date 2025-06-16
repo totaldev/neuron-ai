@@ -11,12 +11,19 @@ class ChromaVectorStore implements VectorStoreInterface
     protected Client $client;
 
     public function __construct(
-        string $collection,
-        string $host = 'http://localhost:8000',
+        protected string $collection,
+        protected string $host = 'http://localhost:8000',
         protected int $topK = 5,
     ) {
-        $this->client = new Client([
-            'base_uri' => trim($host, '/')."/api/v1/collections/{$collection}/",
+    }
+
+    protected function getClient(): Client
+    {
+        if (isset($this->client)) {
+            return $this->client;
+        }
+        return $this->client = new Client([
+            'base_uri' => trim($this->host, '/')."/api/v1/collections/{$this->collection}/",
             'headers' => [
                 'Content-Type' => 'application/json',
             ]
@@ -30,14 +37,14 @@ class ChromaVectorStore implements VectorStoreInterface
 
     public function addDocuments(array $documents): void
     {
-        $this->client->post('upsert', [
+        $this->getClient()->post('upsert', [
             RequestOptions::JSON => $this->mapDocuments($documents),
         ])->getBody()->getContents();
     }
 
     public function similaritySearch(array $embedding): iterable
     {
-        $response = $this->client->post('query', [
+        $response = $this->getClient()->post('query', [
             RequestOptions::JSON => [
                 'queryEmbeddings' => $embedding,
                 'nResults' => $this->topK,
@@ -51,13 +58,19 @@ class ChromaVectorStore implements VectorStoreInterface
         $result = [];
         for ($i = 0; $i < $size; $i++) {
             $document = new Document();
-            $document->id = $response['ids'][$i] ?? null;
+            $document->id = $response['ids'][$i] ?? \uniqid();
             $document->embedding = $response['embeddings'][$i];
             $document->content = $response['documents'][$i];
             $document->sourceType = $response['metadatas'][$i]['sourceType'] ?? null;
             $document->sourceName = $response['metadatas'][$i]['sourceName'] ?? null;
-            $document->chunkNumber = $response['metadatas'][$i]['chunkNumber'] ?? null;
             $document->score = $response['distances'][$i];
+
+            foreach ($response['metadatas'][$i] as $name => $value) {
+                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                    $document->addMetadata($name, $value);
+                }
+            }
+
             $result[] = $document;
         }
 
@@ -65,7 +78,7 @@ class ChromaVectorStore implements VectorStoreInterface
     }
 
     /**
-     * @param array<Document> $documents
+     * @param Document[] $documents
      * @return array
      */
     protected function mapDocuments(array $documents): array
@@ -78,13 +91,13 @@ class ChromaVectorStore implements VectorStoreInterface
 
         ];
         foreach ($documents as $document) {
-            $payload['ids'][] = $document->id;
-            $payload['documents'][] = $document->content;
-            $payload['embeddings'][] = $document->embedding;
+            $payload['ids'][] = $document->getId();
+            $payload['documents'][] = $document->getContent();
+            $payload['embeddings'][] = $document->getEmbedding();
             $payload['metadatas'][] = [
-                'sourceType' => $document->sourceType,
-                'sourceName' => $document->sourceName,
-                'chunkNumber' => $document->chunkNumber,
+                'sourceType' => $document->getSourceType(),
+                'sourceName' => $document->getSourceName(),
+                ...$document->metadata,
             ];
         }
 

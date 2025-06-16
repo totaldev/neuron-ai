@@ -8,7 +8,7 @@ use NeuronAI\RAG\Document;
 class VectorStoreResult
 {
     /**
-     * @param array<Document> $documents
+     * @param Document[] $documents
      */
     public function __construct(
         public Message $question,

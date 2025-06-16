@@ -4,139 +4,295 @@ declare(strict_types=1);
 
 namespace NeuronAI\Tests\Workflow;
 
-use Monolog\Handler\TestHandler;
-use Monolog\Logger;
-use NeuronAI\Agent;
-use NeuronAI\Chat\Enums\MessageRole;
-use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\Exceptions\StateGraphError;
-use NeuronAI\Providers\Ollama\Ollama;
-use NeuronAI\Tools\Tool;
-use NeuronAI\Tools\ToolProperty;
-use NeuronAI\Workflow\AgentNode;
-use NeuronAI\Workflow\StateGraph;
+use NeuronAI\Exceptions\WorkflowException;
+use NeuronAI\Workflow\Edge;
+use NeuronAI\Workflow\Exporter\ExporterInterface;
 use NeuronAI\Workflow\Workflow;
+use NeuronAI\Workflow\WorkflowState;
 use PHPUnit\Framework\TestCase;
-use NeuronAI\Observability\LogObserver;
 
 class WorkflowTest extends TestCase
 {
-    /**
-     * This test checks if the evaluation of a state graph properly works.
-     * @throws StateGraphError
-     */
-    public function test_agent_call_order(): void
+    public function test_basic_workflow(): void
     {
-        $graph = (new StateGraph())
-            ->addNode('a', new TestNode('a'))
-            ->addNode('b', new TestNode('b'))
-            ->addNode('c', new TestNode('c'))
-            ->addEdge(StateGraph::START_NODE, 'a')
-            ->addEdge('a', 'b')
-            ->addEdge('a', 'c')
-            ->addEdge('c', 'b')
-            ->addEdge('b', StateGraph::END_NODE);
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
 
-        $handler = new TestHandler();
+        $result = $workflow->run();
 
-        $workflow = Workflow::make($graph);
-        $workflow->observe(
-            new LogObserver(new Logger('my_logger', [$handler])),
-            'test',
-        );
-
-        $reply = $workflow->execute(new UserMessage('hello'));
-
-        $this->assertEquals(MessageRole::ASSISTANT->value, $reply->getRole());
-        $this->assertEquals('b', $reply->getContent());
-
-        $records = $handler->getRecords();
-
-        $this->assertCount(3, $records);
-        $this->assertEquals('Evaluate a', $records[0]['context']['data']);
-        $this->assertEquals('Evaluate c', $records[1]['context']['data']);
-        $this->assertEquals('Evaluate b', $records[2]['context']['data']);
+        $this->assertEquals('end', $result->get('step'));
     }
 
-    /**
-     * This test checks if chaining two agents works.
-     *
-     * The first agent has a tool to retrive a (hard-coded) timezone for a location.
-     * The second agent has a tool to retrieve the date and time for a timezone.
-     *
-     * When asking "What time is it in Paris/France" the two tools must have been called.
-     */
-    public function test_with_real_agents(): void
+    public function test_workflow_initial_state(): void
     {
-        // TODO: remove this line if you have the requirements installed
-        $this->markTestSkipped('This test requires an Ollama server with the qwen2.5:3b model installed');
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
 
-        /**
-         * If the test is skipped, phpstan will complain...
-         * @phpstan-ignore deadCode.unreachable
-         */
-        $handler = new TestHandler();
+        $initialState = new WorkflowState();
+        $initialState->set('initial_value', 'test');
 
-        $provider = new Ollama(
-            url: 'http://localhost:11434/api', // TODO: adapt to match your Ollama server URL
-            model: 'qwen2.5:3b',
+        $result = $workflow->run($initialState);
+
+        $this->assertEquals('test', $result->get('initial_value'));
+        $this->assertEquals('end', $result->get('step'));
+    }
+
+    public function test_workflow_multiple_nodes()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new MiddleNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, MiddleNode::class))
+            ->addEdge(new Edge(MiddleNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
+
+        $result = $workflow->run();
+
+        $this->assertEquals('end', $result->get('step'));
+        $this->assertEquals(1, $result->get('counter'));
+    }
+
+    public function testWorkflowWithConditionalEdges()
+    {
+        $workflow = new Workflow();
+        $workflow->addNodes([
+                new StartNode(),
+                new MiddleNode(),
+                new ConditionalNode(),
+                new FinishNode(),
+            ])
+            ->addEdges([
+                new Edge(StartNode::class, MiddleNode::class),
+                new Edge(MiddleNode::class, ConditionalNode::class),
+                new Edge(
+                    ConditionalNode::class,
+                    MiddleNode::class,
+                    fn (WorkflowState $state) => $state->get('should_loop', false)
+                ),
+                new Edge(
+                    ConditionalNode::class,
+                    FinishNode::class,
+                    fn (WorkflowState $state) => !$state->get('should_loop', false)
+                )
+            ])
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
+
+        $result = $workflow->run();
+
+        $this->assertEquals('end', $result->get('step'));
+        $this->assertEquals(3, $result->get('counter'));
+        $this->assertFalse($result->get('should_loop'));
+    }
+
+    public function test_validation_throws_exception_when_start_node_not_set()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setEnd(FinishNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage('Start node must be defined');
+
+        $workflow->run();
+    }
+
+    public function test_validation_throws_exception_when_end_node_not_set()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(StartNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage('End node must be defined');
+
+        $workflow->run();
+    }
+
+    public function test_validation_throws_exception_when_start_node_does_not_exist()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage("Start node 'StartNode' does not exist");
+
+        $workflow->run();
+    }
+
+    public function test_validation_throws_exception_when_end_node_does_not_exist()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage("End node 'FinishNode' does not exist");
+
+        $workflow->run();
+    }
+
+    public function test_validation_throws_exception_when_edge_from_node_does_not_exist()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(FinishNode::class)
+            ->setEnd(FinishNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage("Edge from node 'StartNode' does not exist");
+
+        $workflow->run();
+    }
+
+    public function test_validation_throws_exception_when_edge_to_node_does_not_exist()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addEdge(new Edge(StartNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(StartNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage("Edge to node 'FinishNode' does not exist");
+
+        $workflow->run();
+    }
+
+    public function test_execution_throws_exception_when_no_valid_edge_found()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(
+                StartNode::class,
+                FinishNode::class,
+                fn (WorkflowState $state) => false
+            ))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
+
+        $this->expectException(WorkflowException::class);
+        $this->expectExceptionMessage("No valid edge found from node 'StartNode'");
+
+        $workflow->run();
+    }
+
+    public function testMermaidExport()
+    {
+        $workflow = new Workflow();
+        $workflow->addNode(new StartNode())
+            ->addNode(new MiddleNode())
+            ->addNode(new FinishNode())
+            ->addEdge(new Edge(StartNode::class, MiddleNode::class))
+            ->addEdge(new Edge(MiddleNode::class, FinishNode::class))
+            ->setStart(StartNode::class)
+            ->setEnd(FinishNode::class);
+
+        $mermaid = $workflow->export();
+
+        $this->assertStringContainsString('graph TD', $mermaid);
+        $this->assertStringContainsString('StartNode --> MiddleNode', $mermaid);
+        $this->assertStringContainsString('MiddleNode --> FinishNode', $mermaid);
+    }
+
+    public function test_custom_exporter()
+    {
+        $customExporter = new class () implements ExporterInterface {
+            public function export(Workflow $graph): string
+            {
+                return 'custom export';
+            }
+        };
+
+        $workflow = new Workflow();
+        $workflow->setExporter($customExporter);
+        $result = $workflow->export();
+
+        $this->assertEquals('custom export', $result);
+    }
+
+    public function test_workflow_state_data_management()
+    {
+        $state = new WorkflowState();
+
+        $state->set('key1', 'value1');
+        $state->set('key2', 42);
+
+        $this->assertEquals('value1', $state->get('key1'));
+        $this->assertEquals(42, $state->get('key2'));
+        $this->assertEquals('default', $state->get('nonexistent', 'default'));
+        $this->assertTrue($state->has('key1'));
+        $this->assertFalse($state->has('nonexistent'));
+
+        $all = $state->all();
+        $this->assertEquals(['key1' => 'value1', 'key2' => 42], $all);
+    }
+
+    public function test_edge_condition_evaluation()
+    {
+        $state = new WorkflowState();
+        $state->set('test_value', true);
+
+        $edge = new Edge(
+            StartNode::class,
+            FinishNode::class,
+            fn (WorkflowState $s) => $s->get('test_value', false)
         );
 
-        $geocodeTool = Tool::make('get_timezone', 'Get the timezone of a location.')
-            ->addProperty(
-                new ToolProperty(
-                    name: 'location',
-                    type: 'string',
-                    description: 'The location to get the timezone of.',
-                    required: true,
-                )
-            )
-            ->setCallable(fn (string $location) => 'CET' /* Result hard-coded for the tests */);
+        $this->assertTrue($edge->shouldExecute($state));
 
-        $timeTool = Tool::make('get_time_and_date', 'Get the current time and date.')
-            ->addProperty(
-                new ToolProperty(
-                    name: 'timezone',
-                    type: 'string',
-                    description: 'The timezone.',
-                    required: true,
-                )
-            )
-            ->setCallable(
-                fn (string $timezone) => (new \DateTimeImmutable("now", new \DateTimeZone($timezone)))->format('Y-m-d H:i:s')
-            );
+        $state->set('test_value', false);
+        $this->assertFalse($edge->shouldExecute($state));
+    }
 
+    public function test_edge_without_condition()
+    {
+        $state = new WorkflowState();
+        $edge = new Edge(StartNode::class, FinishNode::class);
 
-        $agent1 = Agent::make()
-            ->withProvider($provider)
-            ->withInstructions('You are an AI agent specialized in retrieving the timezone for a location')
-            ->addTool($geocodeTool);
+        $this->assertTrue($edge->shouldExecute($state));
+    }
 
-        $agent2 = Agent::make()
-            ->withProvider($provider)
-            ->withInstructions('You are an AI agent specialized in giving the current time for a given timezone. Always use the tool get_time_and_date.')
-            ->addTool($timeTool);
+    public function test_get_edges_and_nodes()
+    {
+        $workflow = new Workflow();
+        $startNode = new StartNode();
+        $endNode = new FinishNode();
+        $edge = new Edge(StartNode::class, FinishNode::class);
 
-        $graph = (new StateGraph())
-            ->addNode('a', AgentNode::make($agent1))
-            ->addNode('b', AgentNode::make($agent2))
-            ->addEdge(StateGraph::START_NODE, 'a')
-            ->addEdge('a', 'b')
-            ->addEdge('b', StateGraph::END_NODE);
+        $workflow->addNode($startNode)
+            ->addNode($endNode)
+            ->addEdge($edge);
 
-        Workflow::make($graph)
-            ->observe(new LogObserver(new Logger('my_logger', [$handler])))
-            ->execute(new UserMessage('What time is it in Paris/France'));
+        $edges = $workflow->getEdges();
+        $nodes = $workflow->getNodes();
 
-        $records = $handler->getRecords();
+        $this->assertCount(1, $edges);
+        $this->assertSame($edge, $edges[0]);
 
-        // TODO: uncomment to see all the events.
-        // foreach ($records as $record) {
-        //     echo $record['message'] . ' - ' . json_encode($record['context']) . PHP_EOL . PHP_EOL;
-        // }
-
-        $list = array_filter($records, fn ($record) => $record->message === 'tool-called');
-
-        $this->assertCount(2, $list);
+        $this->assertCount(2, $nodes);
+        $this->assertSame($startNode, $nodes['StartNode']);
+        $this->assertSame($endNode, $nodes['FinishNode']);
     }
 }

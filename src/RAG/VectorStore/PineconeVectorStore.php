@@ -10,11 +10,21 @@ class PineconeVectorStore implements VectorStoreInterface
 {
     protected Client $client;
 
+    /**
+     * Metadata filters.
+     *
+     * https://docs.pinecone.io/reference/api/2025-04/data-plane/query#body-filter
+     *
+     * @var array
+     */
+    protected array $filters = [];
+
     public function __construct(
         string $key,
         protected string $indexUrl,
         protected int $topK = 4,
-        string $version = '2025-01'
+        string $version = '2025-04',
+        protected string $namespace = '__default__'
     ) {
         $this->client = new Client([
             'base_uri' => trim($this->indexUrl, '/').'/',
@@ -36,13 +46,15 @@ class PineconeVectorStore implements VectorStoreInterface
     {
         $this->client->post("vectors/upsert", [
             RequestOptions::JSON => [
+                'namespace' => $this->namespace,
                 'vectors' => \array_map(fn (Document $document) => [
-                    'id' => $document->id ?? \uniqid(),
-                    'values' => $document->embedding,
+                    'id' => $document->getId(),
+                    'values' => $document->getEmbedding(),
                     'metadata' => [
-                        'content' => $document->content,
-                        'sourceType' => $document->sourceType,
-                        'sourceName' => $document->sourceName,
+                        'content' => $document->getContent(),
+                        'sourceType' => $document->getSourceType(),
+                        'sourceName' => $document->getSourceName(),
+                        ...$document->metadata,
                     ],
                 ], $documents)
             ]
@@ -53,10 +65,11 @@ class PineconeVectorStore implements VectorStoreInterface
     {
         $result = $this->client->post("query", [
             RequestOptions::JSON => [
-                'namespace' => '',
+                'namespace' => $this->namespace,
                 'includeMetadata' => true,
                 'vector' => $embedding,
                 'topK' => $this->topK,
+                'filters' => $this->filters, // Hybrid search
             ]
         ])->getBody()->getContents();
 
@@ -70,7 +83,20 @@ class PineconeVectorStore implements VectorStoreInterface
             $document->sourceType = $item['metadata']['sourceType'];
             $document->sourceName = $item['metadata']['sourceName'];
             $document->score = $item['score'];
+
+            foreach ($item['metadata'] as $name => $value) {
+                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                    $document->addMetadata($name, $value);
+                }
+            }
+
             return $document;
         }, $result['matches']);
+    }
+
+    public function withFilters(array $filters): self
+    {
+        $this->filters = $filters;
+        return $this;
     }
 }
