@@ -36,12 +36,13 @@ class DocumentSplitter
         $chunks = self::createChunksWithOverlap($parts, $maxLength, $separator, $wordOverlap);
 
         $split = [];
-        //$chunkNumber = 0;
+        $chunkNumber = 0;
         foreach ($chunks as $chunk) {
             $newDocument = new Document($chunk);
             $newDocument->sourceType = $document->getSourceType();
             $newDocument->sourceName = $document->getSourceName();
-            //$chunkNumber++;
+            $newDocument->chunkNumber = $chunkNumber;
+            $chunkNumber++;
             $split[] = $newDocument;
         }
 
