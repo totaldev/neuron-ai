@@ -8,26 +8,15 @@ class OpenAIEmbeddingsProvider extends AbstractEmbeddingsProvider
 {
     protected string $baseUri = 'https://api.openai.com/v1/embeddings';
 
-    protected Client $client;
-
     public function __construct(
         protected string $key,
         protected string $model,
         protected int    $dimensions = 1024
-    ) {
-        $this->client = new Client([
-            'base_uri' => $this->baseUri,
-            'headers'  => [
-                'Accept'        => 'application/json',
-                'Content-Type'  => 'application/json',
-                'Authorization' => 'Bearer ' . $this->key,
-            ],
-        ]);
-    }
+    ) {}
 
     public function embedText(string $text): array
     {
-        $response = $this->client->post('', [
+        $response = $this->getClient()->post('', [
             'json' => [
                 'model'           => $this->model,
                 'input'           => $text,
@@ -39,5 +28,17 @@ class OpenAIEmbeddingsProvider extends AbstractEmbeddingsProvider
         $response = json_decode($response->getBody()->getContents(), true, JSON_UNESCAPED_UNICODE);
 
         return $response['data'][0]['embedding'];
+    }
+
+    public function initClient(): Client
+    {
+        return new Client([
+            'base_uri' => $this->baseUri,
+            'headers'  => [
+                'Accept'        => 'application/json',
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $this->key,
+            ],
+        ]);
     }
 }

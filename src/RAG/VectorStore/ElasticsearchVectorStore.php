@@ -8,11 +8,6 @@ use Exception;
 use NeuronAI\RAG\Document;
 use Elastic\Elasticsearch\Client;
 use Elastic\Elasticsearch\Response\Elasticsearch;
-use function array_key_exists;
-use function array_map;
-use function count;
-use function in_array;
-use function max;
 
 class ElasticsearchVectorStore implements VectorStoreInterface
 {
@@ -125,7 +120,7 @@ class ElasticsearchVectorStore implements VectorStoreInterface
 
         $response = $this->client->search($searchParams);
 
-        return array_map(function (array $item) {
+        return array_map(static function (array $item) {
             $document = new Document($item['_source']['content']);
             //$document->embedding = $item['_source']['embedding']; // avoid carrying large data
             $document->sourceType = $item['_source']['sourceType'];

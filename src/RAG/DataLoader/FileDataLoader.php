@@ -2,7 +2,9 @@
 
 namespace NeuronAI\RAG\DataLoader;
 
+use Exception;
 use NeuronAI\RAG\Document;
+use Throwable;
 
 class FileDataLoader extends AbstractDataLoader
 {
@@ -19,22 +21,13 @@ class FileDataLoader extends AbstractDataLoader
     public function addReader(string $fileExtension, ReaderInterface $reader): self
     {
         $this->readers[$fileExtension] = $reader;
-        return $this;
-    }
 
-    /**
-     * @param array $readers
-     * @return FileDataLoader
-     */
-    public function setReaders(array $readers): self
-    {
-        $this->readers = $readers;
         return $this;
     }
 
     public function getDocuments(): array
     {
-        if (! file_exists($this->path)) {
+        if (!file_exists($this->path)) {
             return [];
         }
 
@@ -46,9 +39,49 @@ class FileDataLoader extends AbstractDataLoader
         // If it's a file
         try {
             return [$this->getDocument($this->getContentFromFile($this->path), $this->path)];
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return [];
         }
+    }
+
+    /**
+     * @param array $readers
+     * @return FileDataLoader
+     */
+    public function setReaders(array $readers): self
+    {
+        $this->readers = $readers;
+
+        return $this;
+    }
+
+    /**
+     * Transform files to plain text.
+     *
+     * Supported PDF and plain text files.
+     *
+     * @throws Exception
+     */
+    protected function getContentFromFile(string $path): string|false
+    {
+        $fileExtension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        if (array_key_exists($fileExtension, $this->readers)) {
+            $reader = $this->readers[$fileExtension];
+
+            return $reader::getText($path);
+        }
+
+        return TextFileReader::getText($path);
+    }
+
+    protected function getDocument(string $content, string $entry): Document
+    {
+        $document = new Document($content);
+        $document->sourceType = 'files';
+        $document->sourceName = $entry;
+
+        return $document;
     }
 
     protected function getDocumentsFromDirectory(string $directory): array
@@ -58,14 +91,14 @@ class FileDataLoader extends AbstractDataLoader
         if ($handle = opendir($directory)) {
             // Read the directory contents
             while (($entry = readdir($handle)) !== false) {
-                $fullPath = $directory.'/'.$entry;
+                $fullPath = $directory . '/' . $entry;
                 if ($entry !== '.' && $entry !== '..') {
                     if (is_dir($fullPath)) {
                         $documents = [...$documents, ...$this->getDocumentsFromDirectory($fullPath)];
                     } else {
                         try {
                             $documents[] = $this->getDocument($this->getContentFromFile($fullPath), $entry);
-                        } catch (\Throwable) {
+                        } catch (Throwable) {
                         }
                     }
                 }
@@ -81,34 +114,5 @@ class FileDataLoader extends AbstractDataLoader
             $this->separator,
             $this->wordOverlap
         );
-    }
-
-    /**
-     * Transform files to plain text.
-     *
-     * Supported PDF and plain text files.
-     *
-     * @throws \Exception
-     */
-    protected function getContentFromFile(string $path): string|false
-    {
-        $fileExtension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-
-        if (\array_key_exists($fileExtension, $this->readers)) {
-            $reader = $this->readers[$fileExtension];
-            return $reader::getText($path);
-        }
-
-        return TextFileReader::getText($path);
-    }
-
-
-    protected function getDocument(string $content, string $entry): Document
-    {
-        $document = new Document($content);
-        $document->sourceType = 'files';
-        $document->sourceName = $entry;
-
-        return $document;
     }
 }

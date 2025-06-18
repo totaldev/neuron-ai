@@ -5,35 +5,24 @@ namespace NeuronAI\RAG\VectorStore;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
+use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
-use function array_map;
-use function in_array;
-use function json_decode;
-use function uniqid;
 
 class MeilisearchVectorStore implements VectorStoreInterface
 {
-    protected Client $client;
+    use HasGuzzleClient;
 
     public function __construct(
-        string           $indexUid,
-        string           $host = 'http://localhost:7700',
-        ?string          $key = null,
-        protected string $embedder = 'default',
-        protected int    $topK = 5,
+        protected string  $indexUid,
+        protected string  $host = 'http://localhost:7700',
+        protected ?string $key = null,
+        protected string  $embedder = 'default',
+        protected int     $topK = 5,
     ) {
-        $this->client = new Client([
-            'base_uri' => trim($host, '/') . '/indexes/' . $indexUid . '/',
-            'headers'  => [
-                'Content-Type' => 'application/json',
-                ...(!is_null($key) ? ['Authorization' => "Bearer {$key}"] : []),
-            ],
-        ]);
-
         try {
-            $this->client->get('');
+            $this->getClient()->get('');
         } catch (Exception $exception) {
-            $this->client->post(trim($host, '/') . '/indexes/', [
+            $this->getClient()->post(trim($host, '/') . '/indexes/', [
                 RequestOptions::JSON => [
                     'uid'        => $indexUid,
                     'primaryKey' => 'id',
@@ -49,7 +38,7 @@ class MeilisearchVectorStore implements VectorStoreInterface
 
     public function addDocuments(array $documents): void
     {
-        $this->client->put('documents', [
+        $this->getClient()->put('documents', [
             RequestOptions::JSON => array_map(function (Document $document) {
                 return [
                     'id'         => $document->getId(),
@@ -68,9 +57,20 @@ class MeilisearchVectorStore implements VectorStoreInterface
         ]);
     }
 
+    public function initClient(): Client
+    {
+        return new Client([
+            'base_uri' => trim($this->host, '/') . '/indexes/' . $this->indexUid . '/',
+            'headers'  => [
+                'Content-Type' => 'application/json',
+                ...(!is_null($this->key) ? ['Authorization' => "Bearer {$this->key}"] : []),
+            ],
+        ]);
+    }
+
     public function similaritySearch(array $embedding): iterable
     {
-        $response = $this->client->post('search', [
+        $response = $this->getClient()->post('search', [
             RequestOptions::JSON => [
                 'vector'           => $embedding,
                 'limit'            => min($this->topK, 20),
@@ -85,9 +85,9 @@ class MeilisearchVectorStore implements VectorStoreInterface
 
         $response = json_decode($response, true);
 
-        return array_map(function (array $item) {
+        return array_map(static function (array $item) {
             $document = new Document($item['content']);
-            $document->id = $item['id'] ?? uniqid();
+            $document->id = $item['id'] ?? uniqid('', true);
             $document->sourceType = $item['sourceType'] ?? null;
             $document->sourceName = $item['sourceName'] ?? null;
             $document->embedding = $item['_vectors']['default']['embeddings'];

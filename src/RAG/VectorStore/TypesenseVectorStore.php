@@ -5,15 +5,10 @@ namespace NeuronAI\RAG\VectorStore;
 use Http\Client\Exception;
 use JsonException;
 use NeuronAI\RAG\Document;
+use RuntimeException;
 use Typesense\Client;
 use Typesense\Exceptions\ObjectNotFound;
 use Typesense\Exceptions\TypesenseClientError;
-use function array_key_exists;
-use function array_map;
-use function gettype;
-use function in_array;
-use function json_encode;
-use function max;
 
 class TypesenseVectorStore implements VectorStoreInterface
 {
@@ -142,7 +137,7 @@ class TypesenseVectorStore implements VectorStoreInterface
 
         $response = $this->client->multiSearch->perform($searchRequests);
 
-        return array_map(function (array $hit) {
+        return array_map(static function (array $hit) {
             $item = $hit['document'];
             $document = new Document($item['content']);
             //$document->embedding = $item['embedding']; // avoid carrying large data
@@ -180,7 +175,7 @@ class TypesenseVectorStore implements VectorStoreInterface
             return;
         }
 
-        throw new \Exception(
+        throw new RuntimeException(
             "Vector embeddings dimension {$dimension} must be the same as the initial setup {$this->vectorDimension} - " .
             json_encode($embeddingField)
         );

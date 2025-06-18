@@ -5,32 +5,22 @@ namespace NeuronAI\RAG\VectorStore;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\RequestOptions;
+use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
-use function array_map;
-use function in_array;
-use function json_decode;
 
 class QdrantVectorStore implements VectorStoreInterface
 {
-    protected Client $client;
+    use HasGuzzleClient;
 
     public function __construct(
         protected string $collectionUrl, // like http://localhost:6333/collections/neuron-ai/
         protected string $key,
         protected int    $topK = 4,
-    ) {
-        $this->client = new Client([
-            'base_uri' => trim($this->collectionUrl, '/') . '/',
-            'headers'  => [
-                'Content-Type' => 'application/json',
-                'api-key'      => $this->key,
-            ],
-        ]);
-    }
+    ) {}
 
     public function addDocument(Document $document): void
     {
-        $this->client->put('points', [
+        $this->getClient()->put('points', [
             RequestOptions::JSON => [
                 'points' => [
                     [
@@ -68,7 +58,7 @@ class QdrantVectorStore implements VectorStoreInterface
             'vector'  => $document->getEmbedding(),
         ], $documents);
 
-        $this->client->put('points', [
+        $this->getClient()->put('points', [
             RequestOptions::JSON => [
                 'operations' => [
                     ['upsert' => compact('points')],
@@ -77,9 +67,20 @@ class QdrantVectorStore implements VectorStoreInterface
         ]);
     }
 
+    public function initClient(): Client
+    {
+        return new Client([
+            'base_uri' => trim($this->collectionUrl, '/') . '/',
+            'headers'  => [
+                'Content-Type' => 'application/json',
+                'api-key'      => $this->key,
+            ],
+        ]);
+    }
+
     public function similaritySearch(array $embedding): iterable
     {
-        $response = $this->client->post('points/search', [
+        $response = $this->getClient()->post('points/search', [
             RequestOptions::JSON => [
                 'vector'       => $embedding,
                 'limit'        => $this->topK,
@@ -90,7 +91,7 @@ class QdrantVectorStore implements VectorStoreInterface
 
         $response = json_decode($response, true);
 
-        return array_map(function (array $item) {
+        return array_map(static function (array $item) {
             $document = new Document($item['payload']['content']);
             $document->id = $item['id'];
             $document->embedding = $item['vector'];

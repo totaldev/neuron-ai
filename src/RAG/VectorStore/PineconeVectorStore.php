@@ -4,6 +4,7 @@ namespace NeuronAI\RAG\VectorStore;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
+use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
 use function array_map;
 use function in_array;
@@ -11,7 +12,7 @@ use function json_decode;
 
 class PineconeVectorStore implements VectorStoreInterface
 {
-    protected Client $client;
+    use HasGuzzleClient;
 
     /**
      * Metadata filters.
@@ -23,22 +24,12 @@ class PineconeVectorStore implements VectorStoreInterface
     protected array $filters = [];
 
     public function __construct(
-        string           $key,
+        protected string $key,
         protected string $indexUrl,
         protected int    $topK = 4,
-        string           $version = '2025-04',
+        protected string $version = '2025-04',
         protected string $namespace = '__default__'
-    ) {
-        $this->client = new Client([
-            'base_uri' => trim($this->indexUrl, '/') . '/',
-            'headers'  => [
-                'Accept'                 => 'application/json',
-                'Content-Type'           => 'application/json',
-                'Api-Key'                => $key,
-                'X-Pinecone-API-Version' => $version,
-            ],
-        ]);
-    }
+    ) {}
 
     public function addDocument(Document $document): void
     {
@@ -47,10 +38,10 @@ class PineconeVectorStore implements VectorStoreInterface
 
     public function addDocuments(array $documents): void
     {
-        $this->client->post("vectors/upsert", [
+        $this->getClient()->post("vectors/upsert", [
             RequestOptions::JSON => [
                 'namespace' => $this->namespace,
-                'vectors'   => array_map(fn(Document $document) => [
+                'vectors'   => array_map(static fn(Document $document) => [
                     'id'       => $document->getId(),
                     'values'   => $document->getEmbedding(),
                     'metadata' => [
@@ -64,9 +55,22 @@ class PineconeVectorStore implements VectorStoreInterface
         ]);
     }
 
+    public function initClient(): Client
+    {
+        return new Client([
+            'base_uri' => trim($this->indexUrl, '/') . '/',
+            'headers'  => [
+                'Accept'                 => 'application/json',
+                'Content-Type'           => 'application/json',
+                'Api-Key'                => $this->key,
+                'X-Pinecone-API-Version' => $this->version,
+            ],
+        ]);
+    }
+
     public function similaritySearch(array $embedding): iterable
     {
-        $result = $this->client->post("query", [
+        $result = $this->getClient()->post("query", [
             RequestOptions::JSON => [
                 'namespace'       => $this->namespace,
                 'includeMetadata' => true,
@@ -78,7 +82,7 @@ class PineconeVectorStore implements VectorStoreInterface
 
         $result = json_decode($result, true);
 
-        return array_map(function (array $item) {
+        return array_map(static function (array $item) {
             $document = new Document();
             $document->id = $item['id'];
             $document->embedding = $item['values'];

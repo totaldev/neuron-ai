@@ -4,15 +4,12 @@ namespace NeuronAI\RAG\VectorStore;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
+use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
-use function count;
-use function in_array;
-use function json_decode;
-use function uniqid;
 
 class ChromaVectorStore implements VectorStoreInterface
 {
-    protected Client $client;
+    use HasGuzzleClient;
 
     public function __construct(
         protected string $collection,
@@ -30,6 +27,16 @@ class ChromaVectorStore implements VectorStoreInterface
         $this->getClient()->post('upsert', [
             RequestOptions::JSON => $this->mapDocuments($documents),
         ])->getBody()->getContents();
+    }
+
+    public function initClient(): Client
+    {
+        return new Client([
+            'base_uri' => trim($this->host, '/') . "/api/v1/collections/{$this->collection}/",
+            'headers'  => [
+                'Content-Type' => 'application/json',
+            ],
+        ]);
     }
 
     public function similaritySearch(array $embedding): iterable
@@ -65,20 +72,6 @@ class ChromaVectorStore implements VectorStoreInterface
         }
 
         return $result;
-    }
-
-    protected function getClient(): Client
-    {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-
-        return $this->client = new Client([
-            'base_uri' => trim($this->host, '/') . "/api/v1/collections/{$this->collection}/",
-            'headers'  => [
-                'Content-Type' => 'application/json',
-            ],
-        ]);
     }
 
     /**

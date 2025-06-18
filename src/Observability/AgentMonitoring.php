@@ -13,12 +13,6 @@ use NeuronAI\Tools\Toolkits\ToolkitInterface;
 use NeuronAI\Tools\ToolPropertyInterface;
 use SplObserver;
 use SplSubject;
-use function array_key_exists;
-use function array_map;
-use function array_reverse;
-use function is_null;
-use function md5;
-use function uniqid;
 
 /**
  * Trace your AI agent execution flow to detect errors and performance bottlenecks in real-time.

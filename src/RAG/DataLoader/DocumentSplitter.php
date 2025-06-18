@@ -3,16 +3,6 @@
 namespace NeuronAI\RAG\DataLoader;
 
 use NeuronAI\RAG\Document;
-use function array_map;
-use function array_merge;
-use function array_slice;
-use function array_sum;
-use function count;
-use function explode;
-use function implode;
-use function min;
-use function strlen;
-use function trim;
 
 class DocumentSplitter
 {

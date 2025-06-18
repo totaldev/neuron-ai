@@ -1,6 +1,6 @@
 <?php
 
-namespace NeuronAI\Providers;
+namespace NeuronAI;
 
 use GuzzleHttp\Client;
 
@@ -19,7 +19,7 @@ trait HasGuzzleClient
         return $this->client;
     }
 
-    public function setClient(Client $client): AIProviderInterface
+    public function setClient(Client $client): static
     {
         $this->client = $client;
 

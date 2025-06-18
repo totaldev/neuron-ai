@@ -30,11 +30,17 @@ class MemoryVectorStore implements VectorStoreInterface
         $this->documents = array_merge($this->documents, $documents);
     }
 
+    /**
+     * @throws VectorStoreException
+     */
     public function cosineSimilarity(array $vector1, array $vector2): float
     {
         return SimilaritySearch::cosine($vector1, $vector2);
     }
 
+    /**
+     * @throws VectorStoreException
+     */
     public function similaritySearch(array $embedding): array
     {
         $distances = [];

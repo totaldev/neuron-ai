@@ -5,12 +5,12 @@ namespace NeuronAI\RAG\PostProcessor;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use NeuronAI\Chat\Messages\Message;
+use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
-use function array_map;
 
 class JinaRerankerPostProcessor implements PostProcessorInterface
 {
-    protected Client $client;
+    use HasGuzzleClient;
 
     public function __construct(
         protected string $key,
@@ -45,18 +45,11 @@ class JinaRerankerPostProcessor implements PostProcessorInterface
 
         $result = json_decode($response, true);
 
-        return array_map(function ($item) use ($documents) {
+        return array_map(static function ($item) use ($documents) {
             $document = $documents[$item['index']];
             $document->setScore($item['relevance_score']);
 
             return $document;
         }, $result['results']);
-    }
-
-    public function setClient(Client $client): PostProcessorInterface
-    {
-        $this->client = $client;
-
-        return $this;
     }
 }

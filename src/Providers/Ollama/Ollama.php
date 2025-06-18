@@ -5,12 +5,13 @@ namespace NeuronAI\Providers\Ollama;
 use GuzzleHttp\Client;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Providers\HasGuzzleClient;
+use NeuronAI\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
 use NeuronAI\Providers\MessageMapperInterface;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\ToolPropertyInterface;
+use stdClass;
 
 class Ollama implements AIProviderInterface
 {
