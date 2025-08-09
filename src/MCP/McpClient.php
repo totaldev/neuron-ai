@@ -103,7 +103,7 @@ class McpClient
             "method" => "tools/call",
             "params" => [
                 "name" => $toolName,
-                "arguments" => $arguments
+                "arguments" => \array_filter($arguments)
             ]
         ];
 

@@ -151,6 +151,8 @@ class McpConnector
     }
 
     /**
+     * @throws ArrayPropertyException
+     * @throws ToolException
      * @throws \ReflectionException
      */
     protected function createObjectProperty(string $name, bool $required, array $prop): ObjectProperty
