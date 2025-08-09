@@ -21,7 +21,6 @@ trait HandleStructured
                 'type' => 'json_schema',
                 'json_schema' => [
                     "name" => $this->sanitizeClassName($className),
-                    "strict" => false,
                     "schema" => $response_format,
                 ],
             ]
