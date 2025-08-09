@@ -35,7 +35,7 @@ class WorkflowPersistenceTest extends TestCase
         $this->assertFileDoesNotExist(__DIR__.\DIRECTORY_SEPARATOR.'neuron_workflow_id.store');
     }
 
-    public function test_workflow_persist_objects_in_state()
+    public function test_workflow_persist_objects_in_state(): void
     {
         $persistence = new FilePersistence(__DIR__);
 
@@ -48,7 +48,8 @@ class WorkflowPersistenceTest extends TestCase
         $persistence->save('id', $interrupt);
 
         $resumedInterrupt = $persistence->load('id');
-        $this->assertInstanceOf(FileChatHistory::class, $resumedInterrupt->getState()->get('chat_history'));;
+        $this->assertInstanceOf(FileChatHistory::class, $resumedInterrupt->getState()->get('chat_history'));
+        ;
         $this->assertEquals($interrupt->getState()->get('chat_history'), $resumedInterrupt->getState()->get('chat_history'), );
 
         $persistence->delete('id');

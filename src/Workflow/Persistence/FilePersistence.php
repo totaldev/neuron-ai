@@ -6,7 +6,6 @@ namespace NeuronAI\Workflow\Persistence;
 
 use NeuronAI\Exceptions\WorkflowException;
 use NeuronAI\Workflow\WorkflowInterrupt;
-use NeuronAI\Workflow\WorkflowState;
 
 class FilePersistence implements PersistenceInterface
 {
