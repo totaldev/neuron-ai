@@ -33,8 +33,8 @@ https://docs.neuron-ai.dev/resources/guides-and-tutorials.
 - [Supported LLM Providers](#providers)
 - [Tools & Function Calls](#tools)
 - [MCP server connector](#mcp)
-- [RAG](#rag)
 - [Structured Output](#structured)
+- [RAG](#rag)
 - [Workflow](#workflow)
 - [Official Documentation](#documentation)
 
@@ -259,6 +259,44 @@ class DataAnalystAgent extends Agent
 
 Learn more about MCP connector in the [documentation](https://docs.neuron-ai.dev/advanced/mcp-servers-connection).
 
+<a name="structured">
+
+## Structured Output
+For many applications, such as chatbots, Agents need to respond to users directly in natural language.
+However, there are scenarios where we need Agents to understand natural language, but output in a structured format.
+
+One common use-case is extracting data from text to insert into a database or use with some other downstream system.
+This guide covers a few strategies for getting structured outputs from the agent.
+
+```php
+use App\Neuron\MyAgent;
+use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\StructuredOutput\SchemaProperty;
+
+/*
+ * Define the output structure as a PHP class.
+ */
+class Person
+{
+    #[SchemaProperty(description: 'The user name')]
+    public string $name;
+
+    #[SchemaProperty(description: 'What the user love to eat')]
+    public string $preference;
+}
+
+// Talk to the agent requiring the structured output
+$person = MyAgent::make()->structured(
+    new UserMessage("I'm John and I like pizza!"),
+    Person::class
+);
+
+echo $person->name ' like '.$person->preference;
+// John like pizza
+```
+
+Learn more about Structured Output on the [documentation](https://docs.neuron-ai.dev/advanced/structured-output).
+
 <a name="rag">
 
 ## RAG
@@ -312,44 +350,6 @@ class MyChatBot extends RAG
 ```
 
 Learn more about RAG in the [documentation](https://docs.neuron-ai.dev/rag).
-
-<a name="structured">
-
-## Structured Output
-For many applications, such as chatbots, Agents need to respond to users directly in natural language.
-However, there are scenarios where we need Agents to understand natural language, but output in a structured format.
-
-One common use-case is extracting data from text to insert into a database or use with some other downstream system.
-This guide covers a few strategies for getting structured outputs from the agent.
-
-```php
-use App\Neuron\MyAgent;
-use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\StructuredOutput\SchemaProperty;
-
-/*
- * Define the output structure as a PHP class.
- */
-class Person
-{
-    #[SchemaProperty(description: 'The user name')]
-    public string $name;
-
-    #[SchemaProperty(description: 'What the user love to eat')]
-    public string $preference;
-}
-
-// Talk to the agent requiring the structured output
-$person = MyAgent::make()->structured(
-    new UserMessage("I'm John and I like pizza!"),
-    Person::class
-);
-
-echo $person->name ' like '.$person->preference;
-// John like pizza
-```
-
-Learn more about Structured Output on the [documentation](https://docs.neuron-ai.dev/advanced/structured-output).
 
 <a name="workflow">
 
