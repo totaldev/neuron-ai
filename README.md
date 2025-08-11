@@ -35,6 +35,7 @@ https://docs.neuron-ai.dev/resources/guides-and-tutorials.
 - [MCP server connector](#mcp)
 - [RAG](#rag)
 - [Structured Output](#structured)
+- [Workflow](#workflow)
 - [Official Documentation](#documentation)
 
 <a name="install">
@@ -349,6 +350,75 @@ echo $person->name ' like '.$person->preference;
 ```
 
 Learn more about Structured Output on the [documentation](https://docs.neuron-ai.dev/advanced/structured-output).
+
+<a name="workflow">
+
+## Workflow
+Think of a Workflow as a smart flowchart for your AI applications. The idea behind Workflow is to allow developers
+to use all the NeuronAI components like AI providers, embeddings, data loaders, chat history, vector store, etc,
+as standalone components to create totally customized agentic entities.
+
+Agent and RAG classes represent a ready to use implementation of the most common patterns when it comes
+to retrieval use cases, or tool calls, structured output, etc. Workflow allows you to program your
+agentic system completely from scratch. Agent and RAG can be used inside a Workflow to complete tasks
+as any other component if you need their built-in capabilities.
+
+As an illustrative example, let's consider a simple workflow with two nodes.
+The connection (Edge) tells the workflow to go from A to B to C.
+
+```php
+<?php
+
+namespace App\Neuron\Workflow;
+
+use App\Neuron\Workflow\InitialNode;
+use App\Neuron\Workflow\MiddleNode;
+use App\Neuron\Workflow\FinishNode;
+use NeuronAI\Workflow\Edge;
+use NeuronAI\Workflow\Workflow;
+
+class SimpleWorkflow extends Workflow
+{
+    public function nodes(): array
+    {
+        return [
+            new InitialNode(),
+            new MiddleNode(),
+            new FinishNode(),
+        ];
+    }
+
+    public function edges(): array
+    {
+        return [
+            // Tell the workflow to go to MiddleNode after InitialNode
+            new Edge(InitialNode::class, MiddleNode::class),
+
+            // Tell the workflow to go to FinishNode after MiddleNode
+            new Edge(MiddleNode::class, FinishNode::class),
+        ];
+    }
+
+    protected function start(): string
+    {
+        return InitialNode::class;
+    }
+
+    protected function end(): array
+    {
+        return [
+            FinishNode::class,
+        ];
+    }
+}
+```
+
+Neuron Workflow supports a robust [**human-in-the-loop**](https://docs.neuron-ai.dev/workflow/human-in-the-loop)
+pattern, enabling human intervention at any point in an automated process. This is especially useful in
+large language model (LLM)-driven applications where model output may require validation, correction,
+or additional context to complete the task.
+
+Learn more about Structured Output on the [documentation](https://docs.neuron-ai.dev/workflow/getting-started).
 
 <a name="documentation">
 
