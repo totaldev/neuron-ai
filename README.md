@@ -110,7 +110,7 @@ echo $response->getContent();
 
 
 $response = $agent->chat(
-    new UserMessage("Do you know my name?")
+    new UserMessage("Do you remember my name?")
 );
 echo $response->getContent();
 // Your name is Valerio, as you said in your introduction.
