@@ -20,7 +20,7 @@ class SupadataYouTubeToolkit extends AbstractToolkit
         return "This toolkit provides access to YouTube video transcriptions, metadata, channel information,
         and playlist data through Supadata.ai for content analysis and research purposes. When users request
         YouTube content analysis, always begin by retrieving video metadata to understand context and availability
-        before requesting more resource-intensive transcriptions. Use transcriptions selectively only when detailed
+        before requesting more resource-intensive contents like transcriptions. Use transcriptions selectively only when detailed
         content analysis is required, and cross-reference multiple data points including titles, descriptions,
         and channel information for comprehensive insights. Be aware that automated transcriptions may contain
         errors and not all videos have transcripts available, so acknowledge these limitations when summarizing content.";
