@@ -413,6 +413,8 @@ class SimpleWorkflow extends Workflow
 }
 ```
 
+[![NeuronAI Workflow](./docs/images/workflow.avif)](https://docs.neuron-ai.dev/workflow/getting-started)
+
 Neuron Workflow supports a robust [**human-in-the-loop**](https://docs.neuron-ai.dev/workflow/human-in-the-loop)
 pattern, enabling human intervention at any point in an automated process. This is especially useful in
 large language model (LLM)-driven applications where model output may require validation, correction,
