@@ -9,18 +9,12 @@ on:
 jobs:
     ci:
         runs-on: ${{ matrix.os }}
-#        services:
-#            postgres:
-#                image: postgres
-#                env:
-#                    POSTGRES_PASSWORD: postgres
-#                ports:
-#                    - 5432:5432
-#                options: >-
-#                    --health-cmd pg_isready
-#                    --health-interval 10s
-#                    --health-timeout 5s
-#                    --health-retries 5
+        services:
+            qdrant:
+                image: qdrant/qdrant:latest
+                ports:
+                    - 6333:6333
+                    - 6334:6334
         strategy:
             matrix:
                 os: [ubuntu-latest]
@@ -38,6 +32,14 @@ jobs:
               with:
                 username: ${{ vars.DOCKERHUB_USERNAME }}
                 password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            -   name: Install poppler-utils (for pdftotext)
+                run: |
+                    sudo apt-get update
+                    sudo apt-get install -y poppler-utils
+
+            -   name: Verify pdftotext installation
+                run: pdftotext -v
 
             - name: Setup PHP
               uses: shivammathur/setup-php@v2

@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace NeuronAI\Observability;
 
-use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Observability\Events\PostProcessed;
+use NeuronAI\Observability\Events\PostProcessing;
+use NeuronAI\Observability\Events\SchemaGenerated;
+use NeuronAI\Observability\Events\SchemaGeneration;
+use NeuronAI\Workflow\Edge;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
@@ -31,11 +35,11 @@ class LogObserver implements \SplObserver
             return [];
         }
 
-        if (is_array($data)) {
+        if (\is_array($data)) {
             return $data;
         }
 
-        if (!is_object($data)) {
+        if (!\is_object($data)) {
             return ['data' => $data];
         }
 
@@ -82,26 +86,46 @@ class LogObserver implements \SplObserver
                 'json' => $data->class,
                 'violations' => $data->violations,
             ],
-            Events\VectorStoreSearching::class => [
+            Events\Retrieving::class => [
                 'question' => $data->question->jsonSerialize(),
             ],
-            Events\VectorStoreResult::class => [
+            Events\Retrieved::class => [
+                'question' => $data->question->jsonSerialize(),
+                'documents' => $data->documents,
+            ],
+            SchemaGeneration::class => [
+                'class' => $data->class,
+            ],
+            SchemaGenerated::class => [
+                'class' => $data->class,
+                'schema' => $data->schema,
+            ],
+            PostProcessing::class => [
+                'processor' => $data->processor,
+                'question' => $data->question->jsonSerialize(),
+                'documents' => $data->documents,
+            ],
+            PostProcessed::class => [
+                'processor' => $data->processor,
                 'question' => $data->question->jsonSerialize(),
                 'documents' => $data->documents,
             ],
             Events\WorkflowStart::class => [
-                'executionList' => $data->executionList,
+                'nodes' => \array_keys($data->nodes),
+                'edges' => \array_map(fn (Edge $edge): array => [
+                    'from' => $edge->getFrom(),
+                    'to' => $edge->getTo(),
+                    'has_condition' => $edge->hasCondition(),
+                ], $data->edges),
             ],
             Events\WorkflowNodeStart::class => [
                 'node' => $data->node,
-                'input' => array_map(fn (Message $message) => $message->jsonSerialize(), $data->messages),
             ],
             Events\WorkflowNodeEnd::class => [
                 'node' => $data->node,
-                'lastReply' => $data->lastReply?->jsonSerialize(),
             ],
             Events\WorkflowEnd::class => [
-                'lastReply' => $data->lastReply?->jsonSerialize(),
+                'state' => $data->state->all(),
             ],
             default => [],
         };

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Tavily;
 
 use GuzzleHttp\Client;
@@ -9,6 +11,9 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Tools\Tool;
 
+/**
+ * @method static static make(string $key)
+ */
 class TavilyExtractTool extends Tool
 {
     protected Client $client;
@@ -26,35 +31,23 @@ class TavilyExtractTool extends Tool
             'url_reader',
             'Get the content of a URL in markdown format.'
         );
-        $this->addProperty(
+    }
+
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'url',
                 PropertyType::STRING,
                 'The URL to read.',
                 true
             ),
-        )->setCallable($this);
+        ];
     }
 
-    protected function getClient(): Client
+    public function __invoke(string $url): array
     {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-
-        return $this->client = new Client([
-            'base_uri' => trim($this->url, '/').'/',
-            'headers' => [
-                'Authorization' => 'Bearer '.$this->key,
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-            ]
-        ]);
-    }
-
-    public function __invoke(string $url): string
-    {
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        if (!\filter_var($url, \FILTER_VALIDATE_URL)) {
             throw new ToolException('Invalid URL.');
         }
 
@@ -68,6 +61,19 @@ class TavilyExtractTool extends Tool
         $result = \json_decode($result, true);
 
         return $result['results'][0];
+    }
+
+
+    protected function getClient(): Client
+    {
+        return $this->client ?? $this->client = new Client([
+            'base_uri' => \trim($this->url, '/').'/',
+            'headers' => [
+                'Authorization' => 'Bearer '.$this->key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ]
+        ]);
     }
 
     public function withOptions(array $options): self

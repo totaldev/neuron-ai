@@ -14,8 +14,17 @@ trait Observable
     private array $observers = [];
 
 
-    private function initEventGroup(string $event = "*"): void
+    private function initEventGroup(string $event = '*'): void
     {
+        /*
+         * If developers attach an observer, the agent monitoring will not be attached by default.
+         */
+        if (!isset($this->observers['*']) && !empty($_ENV['INSPECTOR_INGESTION_KEY'])) {
+            $this->observers['*'] = [
+                AgentMonitoring::instance(),
+            ];
+        }
+
         if (!isset($this->observers[$event])) {
             $this->observers[$event] = [];
         }
@@ -51,7 +60,7 @@ trait Observable
         }
     }
 
-    public function notify(string $event = "*", $data = null): void
+    public function notify(string $event = "*", mixed $data = null): void
     {
         // Broadcasting the '$event' event";
         foreach ($this->getEventObservers($event) as $observer) {

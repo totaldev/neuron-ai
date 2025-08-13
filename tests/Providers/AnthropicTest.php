@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests\Providers;
 
 use GuzzleHttp\Client;
@@ -57,7 +59,7 @@ class AnthropicTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('How can I assist you today?', $response->getContent());
     }
 
@@ -112,7 +114,7 @@ class AnthropicTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
     public function test_chat_with_url_image(): void
@@ -161,7 +163,7 @@ class AnthropicTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
     public function test_chat_with_base64_document(): void
@@ -215,7 +217,7 @@ class AnthropicTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
     public function test_chat_with_url_document(): void
@@ -264,10 +266,10 @@ class AnthropicTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
-    public function test_tools_payload()
+    public function test_tools_payload(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -326,10 +328,10 @@ class AnthropicTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
-    public function test_tools_payload_with_object_properties()
+    public function test_tools_payload_with_object_properties(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -402,10 +404,10 @@ class AnthropicTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
-    public function test_tools_payload_with_object_mapped_class()
+    public function test_tools_payload_with_object_mapped_class(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -479,10 +481,10 @@ class AnthropicTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
-    public function test_tools_payload_with_object_array_properties()
+    public function test_tools_payload_with_object_array_properties(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -583,6 +585,6 @@ class AnthropicTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedResponse, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedResponse, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 }

@@ -1,49 +1,49 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI;
 
+use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Chat\Messages\ToolCallResultMessage;
 use NeuronAI\Exceptions\AgentException;
+use NeuronAI\Observability\Events\AgentError;
+use NeuronAI\Observability\Events\ToolCalled;
+use NeuronAI\Observability\Events\ToolCalling;
 use NeuronAI\Observability\Events\ToolsBootstrapped;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\Toolkits\ToolkitInterface;
-use ReflectionClass;
-use function array_map;
-use function array_merge;
-use function is_array;
 
 trait ResolveTools
 {
     /**
      * Registered tools.
      *
-     * @var ToolInterface[]
+     * @var ToolInterface[]|ToolkitInterface[]
      */
     protected array $tools = [];
 
+    /**
+     * @var ToolInterface[]
+     */
     protected array $toolsBootstrapCache = [];
 
     /**
-     * Add tools.
+     * Get the list of tools.
      *
-     * @param ToolInterface|ToolkitInterface|array $tools
-     * @return AgentInterface
-     * @throws AgentException
+     * @return ToolInterface[]|ToolkitInterface[]
      */
-    public function addTool(ToolInterface|ToolkitInterface|array $tools): AgentInterface
+    protected function tools(): array
     {
-        $tools = is_array($tools) ? $tools : [$tools];
+        return [];
+    }
 
-        foreach ($tools as $t) {
-            if (!$t instanceof ToolInterface && !$t instanceof ToolkitInterface) {
-                throw new AgentException('Tools must be an instance of ToolInterface or ToolkitInterface');
-            }
-            $this->tools[] = $t;
-        }
-
-        // Empty the cache for the next turn.
-        $this->toolsBootstrapCache = [];
-
-        return $this;
+    /**
+     * @return ToolInterface[]|ToolkitInterface[]
+     */
+    public function getTools(): array
+    {
+        return \array_merge($this->tools, $this->tools());
     }
 
     /**
@@ -64,24 +64,25 @@ trait ResolveTools
 
         foreach ($this->getTools() as $tool) {
             if ($tool instanceof ToolkitInterface) {
-                if ($kitGuidelines = $tool->guidelines()) {
-                    $name = (new ReflectionClass($tool))->getShortName();
-                    $kitGuidelines = '# ' . $name . PHP_EOL . $kitGuidelines;
+                $kitGuidelines = $tool->guidelines();
+                if ($kitGuidelines !== null && $kitGuidelines !== '') {
+                    $name = (new \ReflectionClass($tool))->getShortName();
+                    $kitGuidelines = '# '.$name.\PHP_EOL.$kitGuidelines;
                 }
 
                 // Merge the tools
                 $innerTools = $tool->tools();
-                $this->toolsBootstrapCache = array_merge($this->toolsBootstrapCache, $innerTools);
+                $this->toolsBootstrapCache = \array_merge($this->toolsBootstrapCache, $innerTools);
 
                 // Add guidelines to the system prompt
-                if ($kitGuidelines) {
-                    $kitGuidelines .= PHP_EOL . implode(
-                            PHP_EOL . '- ',
-                            array_map(
-                                fn($tool) => "{$tool->getName()}: {$tool->getDescription()}",
-                                $innerTools
-                            )
-                        );
+                if ($kitGuidelines !== null && $kitGuidelines !== '' && $kitGuidelines !== '0') {
+                    $kitGuidelines .= \PHP_EOL.\implode(
+                        \PHP_EOL.'- ',
+                        \array_map(
+                            fn (ToolInterface $tool): string => "{$tool->getName()}: {$tool->getDescription()}",
+                            $innerTools
+                        )
+                    );
 
                     $guidelines[] = $kitGuidelines;
                 }
@@ -91,36 +92,55 @@ trait ResolveTools
             }
         }
 
-        if (!empty($guidelines)) {
-            $instructions = $this->removeDelimitedContent($this->instructions(), '<TOOLS-GUIDELINES>', '</TOOLS-GUIDELINES>');
+        $instructions = $this->removeDelimitedContent($this->resolveInstructions(), '<TOOLS-GUIDELINES>', '</TOOLS-GUIDELINES>');
+        if ($guidelines !== []) {
             $this->withInstructions(
-                $instructions . PHP_EOL . '<TOOLS-GUIDELINES>' . PHP_EOL . implode(PHP_EOL . PHP_EOL, $guidelines) . PHP_EOL . '</TOOLS-GUIDELINES>'
+                $instructions.\PHP_EOL.'<TOOLS-GUIDELINES>'.\PHP_EOL.\implode(\PHP_EOL.\PHP_EOL, $guidelines).\PHP_EOL.'</TOOLS-GUIDELINES>'
             );
         }
 
-        $this->notify('tools-bootstrapped', new ToolsBootstrapped($this->toolsBootstrapCache));
+        $this->notify('tools-bootstrapped', new ToolsBootstrapped($this->toolsBootstrapCache, $guidelines));
 
         return $this->toolsBootstrapCache;
     }
 
     /**
-     * @return ToolInterface[]
+     * Add tools.
+     *
+     * @throws AgentException
      */
-    public function getTools(): array
+    public function addTool(ToolInterface|ToolkitInterface|array $tools): AgentInterface
     {
-        $agentTools = $this->tools();
-        $runtimeTools = $this->tools;
+        $tools = \is_array($tools) ? $tools : [$tools];
 
-        return array_merge($runtimeTools, $agentTools);
+        foreach ($tools as $t) {
+            if (! $t instanceof ToolInterface && ! $t instanceof ToolkitInterface) {
+                throw new AgentException('Tools must be an instance of ToolInterface or ToolkitInterface');
+            }
+            $this->tools[] = $t;
+        }
+
+        // Empty the cache for the next turn.
+        $this->toolsBootstrapCache = [];
+
+        return $this;
     }
 
-    /**
-     * Get the list of tools.
-     *
-     * @return ToolInterface[]
-     */
-    protected function tools(): array
+    protected function executeTools(ToolCallMessage $toolCallMessage): ToolCallResultMessage
     {
-        return [];
+        $toolCallResult = new ToolCallResultMessage($toolCallMessage->getTools());
+
+        foreach ($toolCallResult->getTools() as $tool) {
+            $this->notify('tool-calling', new ToolCalling($tool));
+            try {
+                $tool->execute();
+            } catch (\Throwable $exception) {
+                $this->notify('error', new AgentError($exception));
+                throw $exception;
+            }
+            $this->notify('tool-called', new ToolCalled($tool));
+        }
+
+        return $toolCallResult;
     }
 }

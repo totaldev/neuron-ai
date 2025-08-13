@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\MCP;
 
 class McpClient
@@ -23,7 +25,7 @@ class McpClient
         }
     }
 
-    protected function initialize()
+    protected function initialize(): void
     {
         $request = [
             "jsonrpc" => "2.0",
@@ -41,7 +43,12 @@ class McpClient
             ],
         ];
         $this->transport->send($request);
-        $this->transport->receive();
+        $response = $this->transport->receive();
+
+        if ($response['id'] !== $this->requestId) {
+            throw new McpException('Invalid response ID');
+        }
+
         $request = [
             "jsonrpc" => "2.0",
             "method"  => "notifications/initialized",
@@ -54,7 +61,7 @@ class McpClient
      *
      * @throws \Exception
      */
-    public function listTools($cursor = null): array
+    public function listTools(): array
     {
         $tools = [];
 
@@ -73,6 +80,10 @@ class McpClient
             $this->transport->send($request);
             $response = $this->transport->receive();
 
+            if ($response['id'] !== $this->requestId) {
+                throw new McpException('Invalid response ID');
+            }
+
             $tools = \array_merge($tools, $response['result']['tools']);
         } while (isset($response['result']['nextCursor']));
 
@@ -84,15 +95,17 @@ class McpClient
      *
      * @throws \Exception
      */
-    public function callTool($toolName, $arguments = []): array
+    public function callTool(string $toolName, array $arguments = []): array
     {
+        $arguments = \array_filter($arguments, fn (mixed $value): bool => ! \is_null($value));
+
         $request = [
             "jsonrpc" => "2.0",
             "id" => ++$this->requestId,
             "method" => "tools/call",
             "params" => [
                 "name" => $toolName,
-                "arguments" => $arguments
+                ...($arguments !== [] ? ['arguments' => $arguments] : [])
             ]
         ];
 

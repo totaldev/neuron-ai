@@ -1,24 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI;
 
-use Generator;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\Usage;
-use NeuronAI\Exceptions\AgentException;
 use NeuronAI\Observability\Events\AgentError;
-use NeuronAI\Observability\Events\MessageSaved;
-use NeuronAI\Observability\Events\MessageSaving;
-use Throwable;
 
 trait HandleStream
 {
-    /**
-     * @throws AgentException
-     */
-    public function stream(Message|array $messages): Generator
+    public function stream(Message|array $messages): \Generator
     {
         try {
             $this->notify('stream-start');
@@ -34,7 +28,7 @@ trait HandleStream
                     $this->resolveChatHistory()->getMessages(),
                     function (ToolCallMessage $toolCallMessage) {
                         $toolCallResult = $this->executeTools($toolCallMessage);
-                        yield from $this->stream([$toolCallMessage, $toolCallResult]);
+                        yield from self::stream([$toolCallMessage, $toolCallResult]);
                     }
                 );
 
@@ -42,8 +36,8 @@ trait HandleStream
             $usage = new Usage(0, 0);
             foreach ($stream as $text) {
                 // Catch usage when streaming
-                $decoded = json_decode($text, true);
-                if (is_array($decoded) && array_key_exists('usage', $decoded)) {
+                $decoded = \json_decode((string) $text, true);
+                if (\is_array($decoded) && \array_key_exists('usage', $decoded)) {
                     $usage->inputTokens += $decoded['usage']['input_tokens'] ?? 0;
                     $usage->outputTokens += $decoded['usage']['output_tokens'] ?? 0;
                     continue;
@@ -59,15 +53,13 @@ trait HandleStream
             // Avoid double saving due to the recursive call.
             $last = $this->resolveChatHistory()->getLastMessage();
             if ($response->getRole() !== $last->getRole()) {
-                $this->notify('message-saving', new MessageSaving($response));
-                $this->resolveChatHistory()->addMessage($response);
-                $this->notify('message-saved', new MessageSaved($response));
+                $this->fillChatHistory($response);
             }
 
             $this->notify('stream-stop');
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->notify('error', new AgentError($exception));
-            throw new AgentException($exception->getMessage(), $exception->getCode(), $exception);
+            throw $exception;
         }
     }
 }

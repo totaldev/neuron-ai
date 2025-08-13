@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests;
 
 use NeuronAI\Agent;
@@ -25,7 +27,7 @@ class NeuronAITest extends TestCase
     {
     }
 
-    public function test_agent_instance()
+    public function test_agent_instance(): void
     {
         $neuron = new Agent();
         $this->assertInstanceOf(AgentInterface::class, $neuron);
@@ -36,10 +38,10 @@ class NeuronAITest extends TestCase
         $this->assertInstanceOf(Agent::class, $neuron);
     }
 
-    public function test_system_instructions()
+    public function test_system_instructions(): void
     {
         $system = new SystemPrompt(["Agent"]);
-        $this->assertEquals("# IDENTITY AND PURPOSE".PHP_EOL."Agent", $system);
+        $this->assertEquals("# IDENTITY AND PURPOSE".\PHP_EOL."Agent", $system);
 
         $agent = new class () extends Agent {
             public function instructions(): string
@@ -52,7 +54,7 @@ class NeuronAITest extends TestCase
         $this->assertEquals('Hello2', $agent->resolveInstructions());
     }
 
-    public function test_message_instance()
+    public function test_message_instance(): void
     {
         $tools = [
             new Tool('example', 'example')

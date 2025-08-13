@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Jina;
 
 use GuzzleHttp\Client;
@@ -9,6 +11,9 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Tools\Tool;
 
+/**
+ * @method static make(string $key)
+ */
 class JinaUrlReader extends Tool
 {
     protected Client $client;
@@ -19,24 +24,23 @@ class JinaUrlReader extends Tool
             'url_reader',
             'Get the content of a URL in markdown format.'
         );
+    }
 
-        $this->addProperty(
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'url',
                 PropertyType::STRING,
                 'The URL to read.',
                 true
             ),
-        )->setCallable($this);
+        ];
     }
 
     protected function getClient(): Client
     {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-
-        return $this->client = new Client([
+        return $this->client ?? $this->client = new Client([
             'headers' => [
                 'Authorization' => 'Bearer '.$this->key,
                 'Content-Type' => 'application/json',
@@ -48,7 +52,7 @@ class JinaUrlReader extends Tool
 
     public function __invoke(string $url): string
     {
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        if (!\filter_var($url, \FILTER_VALIDATE_URL)) {
             throw new ToolException('Invalid URL.');
         }
 

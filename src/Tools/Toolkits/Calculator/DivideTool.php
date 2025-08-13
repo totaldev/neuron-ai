@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Calculator;
 
 use NeuronAI\Tools\PropertyType;
@@ -11,29 +13,38 @@ class DivideTool extends Tool
     public function __construct()
     {
         parent::__construct(
-            'divide_numbers',
-            'Divide first number by second and return the result.',
+            'divide',
+            'Calculate the division between two numbers and return the result'
         );
+    }
 
-        $this->addProperty(
-            new ToolProperty(
-                'a',
-                PropertyType::NUMBER,
-                'The numerator of the division.',
-                true
+    public function properties(): array
+    {
+        return [
+            ToolProperty::make(
+                name: 'number1',
+                type: PropertyType::NUMBER,
+                description: 'The numerator of the division',
+                required: true,
+            ),
+            ToolProperty::make(
+                name: 'number2',
+                type: PropertyType::NUMBER,
+                description: 'The denominator of the division',
+                required: true,
             )
-        )->addProperty(
-            new ToolProperty(
-                'b',
-                PropertyType::NUMBER,
-                'The denominator of the division.',
-                true
-            )
-        )->setCallable(function (int|float $a, int|float $b) {
-            if ($b === 0) {
-                return ['operation' => 'division', 'error' => 'Division by zero is not allowed.'];
-            }
-            return $a / $b;
-        });
+        ];
+    }
+
+    public function __invoke(int|float $number1, int|float $number2): int|float|array
+    {
+        if (\floatval($number2) === 0.0) {
+            return [
+                'operation' => $this->name,
+                'error' => 'Division by zero is not allowed.'
+            ];
+        }
+
+        return $number1 / $number2;
     }
 }

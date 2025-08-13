@@ -1,18 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Observability;
 
-use GuzzleHttp\Exception\RequestException;
+use Inspector\Configuration;
 use Inspector\Inspector;
 use Inspector\Models\Segment;
-use NeuronAI\AgentInterface;
+use NeuronAI\Agent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Observability\Events\AgentError;
+use NeuronAI\RAG\RAG;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\Toolkits\ToolkitInterface;
 use NeuronAI\Tools\ToolPropertyInterface;
-use SplObserver;
-use SplSubject;
 
 /**
  * Trace your AI agent execution flow to detect errors and performance bottlenecks in real-time.
@@ -20,7 +21,7 @@ use SplSubject;
  * Getting started with observability:
  * https://docs.neuron-ai.dev/advanced/observability
  */
-class AgentMonitoring implements SplObserver
+class AgentMonitoring implements \SplObserver
 {
     use HandleToolEvents;
     use HandleRagEvents;
@@ -29,87 +30,98 @@ class AgentMonitoring implements SplObserver
     use HandleWorkflowEvents;
 
     public const SEGMENT_TYPE = 'neuron';
-    public const SEGMENT_COLOR = '#506b9b';
-
-    protected array $methodsMap = [
-        'error'                     => 'reportError',
-        'workflow-start'            => 'workflowStart',
-        'workflow-end'              => 'workflowEnd',
-        'chat-start'                => 'start',
-        'chat-stop'                 => 'stop',
-        'stream-start'              => 'start',
-        'stream-stop'               => 'stop',
-        'rag-start'                 => 'start',
-        'rag-stop'                  => 'stop',
-        'structured-start'          => 'start',
-        'structured-stop'           => 'stop',
-        'message-saving'            => 'messageSaving',
-        'message-saved'             => 'messageSaved',
-        'tools-bootstrapping'       => 'toolsBootstrapping',
-        'tools-bootstrapped'        => 'toolsBootstrapped',
-        'inference-start'           => 'inferenceStart',
-        'inference-stop'            => 'inferenceStop',
-        'tool-calling'              => 'toolCalling',
-        'tool-called'               => 'toolCalled',
-        'structured-extracting'     => 'extracting',
-        'structured-extracted'      => 'extracted',
-        'structured-deserializing'  => 'deserializing',
-        'structured-deserialized'   => 'deserialized',
-        'structured-validating'     => 'validating',
-        'structured-validated'      => 'validated',
-        'rag-vectorstore-searching' => 'vectorStoreSearching',
-        'rag-vectorstore-result'    => 'vectorStoreResult',
-        'rag-instructions-changing' => 'instructionsChanging',
-        'rag-instructions-changed'  => 'instructionsChanged',
-        'rag-postprocessing'        => 'postProcessing',
-        'rag-postprocessed'         => 'postProcessed',
-    ];
+    public const SEGMENT_COLOR = '#FF800C';
 
     /**
      * @var array<string, Segment>
      */
     protected array $segments = [];
 
+
+    /**
+     * @var array<string, string>
+     */
+    protected array $methodsMap = [
+        'error' => 'reportError',
+        'chat-start' => 'start',
+        'chat-stop' => 'stop',
+        'stream-start' => 'start',
+        'stream-stop' => 'stop',
+        'structured-start' => 'start',
+        'structured-stop' => 'stop',
+        'chat-rag-start' => 'start',
+        'chat-rag-stop' => 'stop',
+        'stream-rag-start' => 'start',
+        'stream-rag-stop' => 'stop',
+        'structured-rag-start' => 'start',
+        'structured-rag-stop' => 'stop',
+
+        'message-saving' => 'messageSaving',
+        'message-saved' => 'messageSaved',
+        'tools-bootstrapping' => 'toolsBootstrapping',
+        'tools-bootstrapped' => 'toolsBootstrapped',
+        'inference-start' => 'inferenceStart',
+        'inference-stop' => 'inferenceStop',
+        'tool-calling' => 'toolCalling',
+        'tool-called' => 'toolCalled',
+        'schema-generation' => 'schemaGeneration',
+        'schema-generated' => 'schemaGenerated',
+        'structured-extracting' => 'extracting',
+        'structured-extracted' => 'extracted',
+        'structured-deserializing' => 'deserializing',
+        'structured-deserialized' => 'deserialized',
+        'structured-validating' => 'validating',
+        'structured-validated' => 'validated',
+        'rag-retrieving' => 'ragRetrieving',
+        'rag-retrieved' => 'ragRetrieved',
+        'rag-preprocessing' => 'preProcessing',
+        'rag-preprocessed' => 'preProcessed',
+        'rag-postprocessing' => 'postProcessing',
+        'rag-postprocessed' => 'postProcessed',
+        'workflow-start' => 'workflowStart',
+        'workflow-end' => 'workflowEnd',
+        'workflow-node-start' => 'workflowNodeStart',
+        'workflow-node-end' => 'workflowNodeEnd',
+    ];
+
+    protected static ?AgentMonitoring $instance = null;
+
     /**
      * @param Inspector $inspector The monitoring instance
-     * @param bool      $catch     Report internal agent errors
      */
     public function __construct(
         protected Inspector $inspector,
-        protected bool      $catch = true
-    ) {}
+        protected bool $autoFlush = false,
+    ) {
+    }
 
-    public function getMessageId(Message $message): string
+
+    public static function instance(): AgentMonitoring
     {
-        $content = $message->getContent();
+        $configuration = new Configuration($_ENV['INSPECTOR_INGESTION_KEY']);
+        $configuration->setTransport($_ENV['INSPECTOR_TRANSPORT'] ?? 'async');
+        $configuration->setVersion($_ENV['INSPECTOR_VERSION'] ?? $configuration->getVersion());
 
-        if (!is_string($content)) {
-            $content = json_encode($content, JSON_UNESCAPED_UNICODE);
+        // Split monitoring between agents and workflows.
+        if (isset($_ENV['NEURON_SPLIT_MONITORING'])) {
+            return new self(new Inspector($configuration), $_ENV['NEURON_AUTOFLUSH'] ?? false);
         }
 
-        return md5($content . $message->getRole());
+        if (!self::$instance instanceof AgentMonitoring) {
+            self::$instance = new self(new Inspector($configuration), $_ENV['NEURON_AUTOFLUSH'] ?? false);
+        }
+        return self::$instance;
     }
 
-    public function getPrefix(string $event): string
+    public function update(\SplSubject $subject, ?string $event = null, mixed $data = null): void
     {
-        return explode('-', $event)[0];
-    }
-
-    public function reportError(AgentInterface $agent, string $event, AgentError $data)
-    {
-        if ($this->catch) {
-            $error = $this->inspector->reportException($data->exception, !$data->unhandled);
-            if ($data->exception instanceof RequestException) {
-                // @phpstan-ignore-next-line
-                $error->message = $data->exception->getResponse()->getBody()->getContents();
-            }
-            if ($data->unhandled) {
-                $this->inspector->transaction()->setResult('error');
-            }
+        if (!\is_null($event) && \array_key_exists($event, $this->methodsMap)) {
+            $method = $this->methodsMap[$event];
+            $this->$method($subject, $event, $data);
         }
     }
 
-    public function start(AgentInterface $agent, string $event, $data = null)
+    public function start(Agent $agent, string $event, mixed $data = null): void
     {
         if (!$this->inspector->isRecording()) {
             return;
@@ -119,77 +131,108 @@ class AgentMonitoring implements SplObserver
         $class = $agent::class;
 
         if ($this->inspector->needTransaction()) {
-            $this->inspector->startTransaction($class . '::' . $method)->setType('ai-agent');
-        } elseif ($this->inspector->canAddSegments()) {
-            $key = $class . $method;
+            $this->inspector->startTransaction($class.'::'.$method)
+                ->setType('ai-agent')
+                ->setContext($this->getContext($agent));
+        } elseif ($this->inspector->canAddSegments() && !$agent instanceof RAG) { // do not add "parent" agent segments on RAG
+            $key = $class.$method;
 
-            if (array_key_exists($key, $this->segments)) {
-                $key .= '-' . uniqid();
+            if (\array_key_exists($key, $this->segments)) {
+                $key .= '-'.\uniqid();
             }
 
-            $this->segments[$key] = $this->inspector->startSegment(self::SEGMENT_TYPE . '-' . $method, "{$class}::{$method}()")
+            $segment = $this->inspector->startSegment(self::SEGMENT_TYPE.'-'.$method, "{$class}::{$method}")
                 ->setColor(self::SEGMENT_COLOR);
+            $segment->setContext($this->getContext($agent));
+            $this->segments[$key] = $segment;
         }
     }
 
-    public function stop(AgentInterface $agent, string $event, $data = null)
+    /**
+     * @throws \Exception
+     */
+    public function stop(Agent $agent, string $event, mixed $data = null): void
     {
         $method = $this->getPrefix($event);
         $class = $agent::class;
 
-        if (array_key_exists($class . $method, $this->segments)) {
+        if (\array_key_exists($class.$method, $this->segments)) {
             // End the last segment for the given method and agent class
-            foreach (array_reverse($this->segments, true) as $key => $value) {
-                if ($key === $class . $method) {
-                    $value->setContext($this->getContext($agent))->end();
+            foreach (\array_reverse($this->segments, true) as $key => $segment) {
+                if ($key === $class.$method) {
+                    $segment->setContext($this->getContext($agent));
+                    $segment->end();
                     unset($this->segments[$key]);
                     break;
                 }
             }
         } elseif ($this->inspector->canAddSegments()) {
-            $this->inspector->transaction()
-                ->setContext($this->getContext($agent))
-                ->setResult('success');
+            $transaction = $this->inspector->transaction()->setResult('success');
+            $transaction->setContext($this->getContext($agent));
+
+            if ($this->autoFlush) {
+                $this->inspector->flush();
+            }
         }
     }
 
-    public function update(SplSubject $subject, ?string $event = null, mixed $data = null): void
+    public function reportError(\SplSubject $subject, string $event, AgentError $data): void
     {
-        if (!is_null($event) && array_key_exists($event, $this->methodsMap)) {
-            $method = $this->methodsMap[$event];
-            $this->$method($subject, $event, $data);
+        $this->inspector->reportException($data->exception, !$data->unhandled);
+
+        if ($data->unhandled) {
+            $this->inspector->transaction()->setResult('error');
+            if ($subject instanceof Agent) {
+                $this->inspector->transaction()->setContext($this->getContext($subject));
+            }
         }
     }
 
-    protected function getBaseClassName(string $class): string
+    public function getPrefix(string $event): string
     {
-        return substr(strrchr($class, '\\'), 1);
+        return \explode('-', $event)[0];
     }
 
-    protected function getContext(AgentInterface $agent): array
+    protected function getContext(Agent $agent): array
     {
-        $mapTool = fn(ToolInterface $tool) => [
+        $mapTool = fn (ToolInterface $tool) => [
             $tool->getName() => [
                 'description' => $tool->getDescription(),
-                'properties'  => array_map(
-                    fn(ToolPropertyInterface $property) => $property->jsonSerialize(),
+                'properties' => \array_map(
+                    fn (ToolPropertyInterface $property) => $property->jsonSerialize(),
                     $tool->getProperties()
-                ),
-            ],
+                )
+            ]
         ];
 
         return [
             'Agent' => [
-                'instructions' => $agent->instructions(),
-                'provider'     => $agent->resolveProvider()::class,
+                'provider' => $agent->resolveProvider()::class,
+                'instructions' => $agent->resolveInstructions(),
             ],
-            'Tools' => array_map(
-                fn(ToolInterface|ToolkitInterface $tool) => $tool instanceof ToolInterface
+            'Tools' => \array_map(
+                fn (ToolInterface|ToolkitInterface $tool) => $tool instanceof ToolInterface
                     ? $mapTool($tool)
-                    : [get_class($tool) => array_map($mapTool, $tool->tools())],
+                    : [$tool::class => \array_map($mapTool, $tool->tools())],
                 $agent->getTools()
             ),
             //'Messages' => $agent->resolveChatHistory()->getMessages(),
         ];
+    }
+
+    public function getMessageId(Message $message): string
+    {
+        $content = $message->getContent();
+
+        if (!\is_string($content)) {
+            $content = \json_encode($content, \JSON_UNESCAPED_UNICODE);
+        }
+
+        return \md5($content.$message->getRole());
+    }
+
+    protected function getBaseClassName(string $class): string
+    {
+        return \substr(\strrchr($class, '\\'), 1);
     }
 }

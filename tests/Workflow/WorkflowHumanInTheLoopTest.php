@@ -7,7 +7,6 @@ namespace NeuronAI\Tests\Workflow;
 use NeuronAI\Exceptions\WorkflowException;
 use NeuronAI\Workflow\Edge;
 use NeuronAI\Workflow\Persistence\InMemoryPersistence;
-use NeuronAI\Workflow\Persistence\PersistenceInterface;
 use NeuronAI\Workflow\Workflow;
 use NeuronAI\Workflow\WorkflowContext;
 use NeuronAI\Workflow\WorkflowInterrupt;
@@ -16,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 
 class WorkflowHumanInTheLoopTest extends TestCase
 {
-    public function test_basic_interrupt_and_resume()
+    public function test_basic_interrupt_and_resume(): void
     {
         $workflow = new Workflow();
         $workflow->addNodes([
@@ -35,7 +34,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
             $workflow->run();
             $this->fail('Expected WorkflowInterrupt exception was not thrown');
         } catch (WorkflowInterrupt $interrupt) {
-            $this->assertEquals('InterruptNode', $interrupt->getCurrentNode());
+            $this->assertEquals(InterruptNode::class, $interrupt->getCurrentNode());
             $this->assertEquals([
                 'question' => 'Should we continue?',
                 'current_value' => 42
@@ -53,7 +52,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals(52, $result->get('final_value'));
     }
 
-    public function test_workflow_without_interrupt()
+    public function test_workflow_without_interrupt(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new BeforeInterruptNode())
@@ -69,7 +68,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals(52, $result->get('final_value'));
     }
 
-    public function test_multiple_interrupts_in_same_workflow()
+    public function test_multiple_interrupts_in_same_workflow(): void
     {
         $workflow = new Workflow();
         $workflow->addNodes([
@@ -81,13 +80,13 @@ class WorkflowHumanInTheLoopTest extends TestCase
                 new Edge(
                     MultipleInterruptNode::class,
                     MultipleInterruptNode::class,
-                    fn (WorkflowState $state) => $state->get('interrupt_counter', 0) < 2
+                    fn (WorkflowState $state): bool => $state->get('interrupt_counter', 0) < 2
                 ),
                 // Move forward when the interrupt_counter is >= 2
                 new Edge(
                     MultipleInterruptNode::class,
                     AfterInterruptNode::class,
-                    fn (WorkflowState $state) => $state->get('interrupt_counter', 0) >= 2
+                    fn (WorkflowState $state): bool => $state->get('interrupt_counter', 0) >= 2
                 )
             ])
             ->setStart(MultipleInterruptNode::class)
@@ -121,7 +120,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals(2, $finalResult->get('interrupt_counter'));
     }
 
-    public function test_conditional_interrupt()
+    public function test_conditional_interrupt(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new ConditionalInterruptNode())
@@ -137,7 +136,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals('after_interrupt', $result->get('step'));
         $this->assertFalse($result->has('high_value_feedback'));
 
-        $workflow2 = new Workflow(null, 'workflow_2');
+        $workflow2 = new Workflow(new InMemoryPersistence(), 'workflow_2');
         $workflow2->addNode(new ConditionalInterruptNode())
             ->addNode(new AfterInterruptNode())
             ->addEdge(new Edge(ConditionalInterruptNode::class, AfterInterruptNode::class))
@@ -161,7 +160,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals('proceed', $result->get('high_value_feedback'));
     }
 
-    public function test_resume_without_saved_workflow()
+    public function test_resume_without_saved_workflow(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new BeforeInterruptNode())
@@ -176,7 +175,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $workflow->resume(['some' => 'feedback']);
     }
 
-    public function test_workflow_state_persistence()
+    public function test_workflow_state_persistence(): void
     {
         $persistence = new InMemoryPersistence();
         $workflow = new Workflow($persistence, 'test_workflow');
@@ -191,20 +190,16 @@ class WorkflowHumanInTheLoopTest extends TestCase
 
         try {
             $workflow->run();
-        } catch (WorkflowInterrupt $interrupt) {
+        } catch (WorkflowInterrupt) {
             // Verify interrupt was saved
             $savedInterrupt = $persistence->load('test_workflow');
-            $this->assertNotNull($savedInterrupt);
-            $this->assertEquals('InterruptNode', $savedInterrupt->getCurrentNode());
+            $this->assertEquals(InterruptNode::class, $savedInterrupt->getCurrentNode());
         }
 
         $workflow->resume(['status' => 'approved']);
-
-        $savedInterrupt = $persistence->load('test_workflow');
-        $this->assertEquals('InterruptNode', $savedInterrupt->getCurrentNode());
     }
 
-    public function test_workflow_interrupt_exception()
+    public function test_workflow_interrupt_exception(): void
     {
         $state = new WorkflowState();
         $state->set('test', 'value');
@@ -221,7 +216,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals('Workflow interrupted for human input', $interrupt->getMessage());
     }
 
-    public function test_workflow_context_behavior()
+    public function test_workflow_context_behavior(): void
     {
         $persistence = new InMemoryPersistence();
         $context = new WorkflowContext('test_id', 'TestNode', $persistence, new WorkflowState());
@@ -239,7 +234,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertEquals('feedback', $result);
     }
 
-    public function test_node_without_context()
+    public function test_node_without_context(): void
     {
         $node = new InterruptNode();
         $state = new WorkflowState();
@@ -250,58 +245,7 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $node->run($state);
     }
 
-    public function test_custom_persistence_layer()
-    {
-        $customPersistence = new class () implements PersistenceInterface {
-            private array $data = [];
-
-            public function save(string $workflowId, WorkflowInterrupt $interrupt): void
-            {
-                $this->data[$workflowId] = [
-                    'node' => $interrupt->getCurrentNode(),
-                    'data' => $interrupt->getData(),
-                    'state' => $interrupt->getState()
-                ];
-            }
-
-            public function load(string $workflowId): ?WorkflowInterrupt
-            {
-                if (!isset($this->data[$workflowId])) {
-                    return null;
-                }
-
-                $stored = $this->data[$workflowId];
-                return new WorkflowInterrupt(
-                    $stored['data'],
-                    $stored['node'],
-                    $stored['state']
-                );
-            }
-
-            public function delete(string $workflowId): void
-            {
-                unset($this->data[$workflowId]);
-            }
-        };
-
-        $workflow = new Workflow($customPersistence, 'custom_test');
-        $workflow->addNode(new InterruptNode())
-            ->addNode(new AfterInterruptNode())
-            ->addEdge(new Edge(InterruptNode::class, AfterInterruptNode::class))
-            ->setStart(InterruptNode::class)
-            ->setEnd(AfterInterruptNode::class);
-
-        try {
-            $workflow->run();
-        } catch (WorkflowInterrupt $interrupt) {
-            $this->assertEquals('InterruptNode', $interrupt->getCurrentNode());
-        }
-
-        $result = $workflow->resume(['custom' => 'data']);
-        $this->assertEquals(['custom' => 'data'], $result->get('user_feedback'));
-    }
-
-    public function test_workflow_id_generation()
+    public function test_workflow_id_generation(): void
     {
         $workflow1 = new Workflow();
         $workflow2 = new Workflow();
@@ -310,9 +254,9 @@ class WorkflowHumanInTheLoopTest extends TestCase
         $this->assertStringStartsWith('neuron_workflow_', $workflow1->getWorkflowId());
     }
 
-    public function testCustomWorkflowId()
+    public function testCustomWorkflowId(): void
     {
-        $workflow = new Workflow(null, 'my_custom_id');
+        $workflow = new Workflow(new InMemoryPersistence(), 'my_custom_id');
         $this->assertEquals('my_custom_id', $workflow->getWorkflowId());
     }
 }

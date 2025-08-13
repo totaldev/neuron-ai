@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Workflow\Persistence;
 
+use NeuronAI\Exceptions\WorkflowException;
 use NeuronAI\Workflow\WorkflowInterrupt;
 
 class InMemoryPersistence implements PersistenceInterface
@@ -13,9 +16,9 @@ class InMemoryPersistence implements PersistenceInterface
         $this->storage[$workflowId] = $interrupt;
     }
 
-    public function load(string $workflowId): ?WorkflowInterrupt
+    public function load(string $workflowId): WorkflowInterrupt
     {
-        return $this->storage[$workflowId] ?? null;
+        return $this->storage[$workflowId] ?? throw new WorkflowException("No saved workflow found for ID: {$workflowId}");
     }
 
     public function delete(string $workflowId): void

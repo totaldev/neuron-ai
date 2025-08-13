@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Tavily;
 
 use GuzzleHttp\Client;
@@ -8,6 +10,9 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Tools\Tool;
 
+/**
+ * @method static static make(string $key, array $topics)
+ */
 class TavilySearchTool extends Tool
 {
     protected Client $client;
@@ -28,21 +33,25 @@ class TavilySearchTool extends Tool
         protected string $key,
         protected array $topics = [],
     ) {
+
         parent::__construct(
             'web_search',
             'Use this tool to search the web for additional information '.
-            (!empty($this->topics) ? 'about '.implode(', ', $this->topics).', or ' : '').
+            ($this->topics === [] ? '' : 'about '.\implode(', ', $this->topics).', or ').
             'if the question is outside the scope of the context you have.'
         );
 
-        $this->addProperty(
+    }
+
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'search_query',
                 PropertyType::STRING,
                 'The search query to perform web search.',
                 true
             ),
-        )->addProperty(
             new ToolProperty(
                 'topic',
                 PropertyType::STRING,
@@ -50,32 +59,26 @@ class TavilySearchTool extends Tool
                 false,
                 ['general', 'news']
             ),
-        )->addProperty(
             new ToolProperty(
                 'time_range',
                 PropertyType::STRING,
                 '',
                 false,
                 ['day, week, month, year']
-            )
-        )->addProperty(
+            ),
             new ToolProperty(
                 'days',
                 PropertyType::INTEGER,
                 'Filter search results for a certain range of days up to today.',
                 false,
             )
-        )->setCallable($this);
+        ];
     }
 
     protected function getClient(): Client
     {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-
-        return $this->client = new Client([
-            'base_uri' => trim($this->url, '/').'/',
+        return $this->client ?? $this->client = new Client([
+            'base_uri' => \trim($this->url, '/').'/',
             'headers' => [
                 'Authorization' => 'Bearer '.$this->key,
                 'Content-Type' => 'application/json',
@@ -86,13 +89,17 @@ class TavilySearchTool extends Tool
 
     public function __invoke(
         string $search_query,
-        string $topic = 'general',
-        string $time_range = 'day',
-        int $days = 7,
-    ) {
+        ?string $topic = null,
+        ?string $time_range = null,
+        ?int $days = null,
+    ): array {
+        $topic ??= 'general';
+        $time_range ??= 'day';
+        $days ??= 7;
+
         $result = $this->getClient()->post('search', [
             RequestOptions::JSON => \array_merge(
-                compact('topic', 'time_range', 'days'),
+                ['topic' => $topic, 'time_range' => $time_range, 'days' => $days],
                 $this->options,
                 [
                     'query' => $search_query,
@@ -104,7 +111,7 @@ class TavilySearchTool extends Tool
 
         return [
             'answer' => $result['answer'],
-            'results' => \array_map(fn ($item) => [
+            'results' => \array_map(fn (array $item): array => [
                 'title' => $item['title'],
                 'url' => $item['url'],
                 'content' => $item['content'],

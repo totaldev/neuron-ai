@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests\VectorStore;
 
 use Elastic\Elasticsearch\Client;
@@ -27,22 +29,22 @@ class ElasticsearchTest extends TestCase
         $this->client = ClientBuilder::create()->build();
 
         // embedding "Hello World!"
-        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
+        $this->embedding = \json_decode(\file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
     }
 
-    public function test_elasticsearch_instance()
+    public function test_elasticsearch_instance(): void
     {
         $store = new ElasticsearchVectorStore($this->client, 'test');
         $this->assertInstanceOf(VectorStoreInterface::class, $store);
     }
 
-    public function test_add_document_and_search()
+    public function test_add_document_and_search(): void
     {
         $store = new ElasticsearchVectorStore($this->client, 'test');
 
         $document = new Document('Hello World!');
-        $document->addMetadata('customProperty', 'customValue');
         $document->embedding = $this->embedding;
+        $document->addMetadata('customProperty', 'customValue');
 
         $store->addDocument($document);
 
@@ -50,5 +52,14 @@ class ElasticsearchTest extends TestCase
 
         $this->assertEquals($document->getContent(), $results[0]->getContent());
         $this->assertEquals($document->metadata['customProperty'], $results[0]->metadata['customProperty']);
+    }
+
+    public function test_elasticsearch_delete_documents(): void
+    {
+        $store = new ElasticsearchVectorStore($this->client, 'test');
+        $store->deleteBySource('manual', 'manual');
+
+        $results = $store->similaritySearch($this->embedding);
+        $this->assertCount(0, $results);
     }
 }

@@ -1,46 +1,73 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\RAG\VectorStore;
 
-use Generator;
 use NeuronAI\Exceptions\VectorStoreException;
 use NeuronAI\RAG\Document;
-use NeuronAI\RAG\VectorStore\Search\SimilaritySearch;
-use function array_map;
-use function array_slice;
-use function count;
-use function file_put_contents;
-use function is_dir;
-use function json_decode;
-use function json_encode;
-use function usort;
 
 class FileVectorStore implements VectorStoreInterface
 {
-    /**
-     * @throws VectorStoreException
-     */
     public function __construct(
         protected string $directory,
-        protected int    $topK = 4,
+        protected int $topK = 4,
         protected string $name = 'neuron',
         protected string $ext = '.store'
     ) {
-        if (!is_dir($this->directory)) {
+        if (!\is_dir($this->directory)) {
             throw new VectorStoreException("Directory '{$this->directory}' does not exist");
         }
     }
 
-    public function addDocument(Document $document): void
+    protected function getFilePath(): string
     {
-        $this->addDocuments([$document]);
+        return $this->directory . \DIRECTORY_SEPARATOR . $this->name.$this->ext;
     }
 
-    public function addDocuments(array $documents): void
+    public function addDocument(Document $document): VectorStoreInterface
+    {
+        return $this->addDocuments([$document]);
+    }
+
+    public function addDocuments(array $documents): VectorStoreInterface
     {
         $this->appendToFile(
-            array_map(static fn(Document $document) => $document->jsonSerialize(), $documents)
+            \array_map(fn (Document $document): array => $document->jsonSerialize(), $documents)
         );
+        return $this;
+    }
+
+    public function deleteBySource(string $sourceType, string $sourceName): VectorStoreInterface
+    {
+        // Temporary file
+        $tmpFile = $this->directory . \DIRECTORY_SEPARATOR . $this->name.'_tmp'.$this->ext;
+
+        // Create a temporary file handle
+        $tempHandle = \fopen($tmpFile, 'w');
+        if (!$tempHandle) {
+            throw new \RuntimeException("Cannot create temporary file: {$tmpFile}");
+        }
+
+        try {
+            foreach ($this->getLine($this->getFilePath()) as $line) {
+                $document = \json_decode((string) $line, true);
+
+                if ($document['sourceType'] !== $sourceType || $document['sourceName'] !== $sourceName) {
+                    \fwrite($tempHandle, (string) $line);
+                }
+            }
+        } finally {
+            \fclose($tempHandle);
+        }
+
+        // Replace the original file with the filtered version
+        \unlink($this->getFilePath());
+        if (!\rename($tmpFile, $this->getFilePath())) {
+            throw new VectorStoreException(self::class." failed to replace original file.");
+        }
+
+        return $this;
     }
 
     public function similaritySearch(array $embedding): array
@@ -48,30 +75,30 @@ class FileVectorStore implements VectorStoreInterface
         $topItems = [];
 
         foreach ($this->getLine($this->getFilePath()) as $document) {
-            $document = json_decode($document, true);
+            $document = \json_decode((string) $document, true);
 
             if (empty($document['embedding'])) {
                 throw new VectorStoreException("Document with the following content has no embedding: {$document['content']}");
             }
-            $dist = $this->cosineSimilarity($embedding, $document['embedding']);
+            $dist = VectorSimilarity::cosineDistance($embedding, $document['embedding']);
 
-            $topItems[] = compact('dist', 'document');
+            $topItems[] = ['dist' => $dist, 'document' => $document];
 
-            usort($topItems, fn($a, $b) => $a['dist'] <=> $b['dist']);
+            \usort($topItems, fn (array $a, array $b): int => $a['dist'] <=> $b['dist']);
 
-            if (count($topItems) > $this->topK) {
-                $topItems = array_slice($topItems, 0, $this->topK, true);
+            if (\count($topItems) > $this->topK) {
+                $topItems = \array_slice($topItems, 0, $this->topK, true);
             }
         }
 
-        return array_map(static function ($item) {
+        return \array_map(function (array $item): Document {
             $itemDoc = $item['document'];
             $document = new Document($itemDoc['content']);
             $document->embedding = $itemDoc['embedding'];
             $document->sourceType = $itemDoc['sourceType'];
             $document->sourceName = $itemDoc['sourceName'];
             $document->id = $itemDoc['id'];
-            $document->score = 1 - $item['dist'];
+            $document->score = VectorSimilarity::similarityFromDistance($item['dist']);
             $document->metadata = $itemDoc['metadata'] ?? [];
 
             return $document;
@@ -80,36 +107,23 @@ class FileVectorStore implements VectorStoreInterface
 
     protected function appendToFile(array $documents): void
     {
-        file_put_contents(
+        \file_put_contents(
             $this->getFilePath(),
-            implode(PHP_EOL, array_map(fn(array $vector) => json_encode($vector), $documents)) . PHP_EOL,
-            FILE_APPEND
+            \implode(\PHP_EOL, \array_map(fn (array $vector) => \json_encode($vector), $documents)).\PHP_EOL,
+            \FILE_APPEND
         );
     }
 
-    /**
-     * @throws VectorStoreException
-     */
-    protected function cosineSimilarity(array $vector1, array $vector2): float
+    protected function getLine(string $filename): \Generator
     {
-        return SimilaritySearch::cosine($vector1, $vector2);
-    }
-
-    protected function getFilePath(): string
-    {
-        return $this->directory . DIRECTORY_SEPARATOR . $this->name . $this->ext;
-    }
-
-    protected function getLine($file): Generator
-    {
-        $f = fopen($file, 'rb');
+        $f = \fopen($filename, 'r');
 
         try {
-            while ($line = fgets($f)) {
+            while ($line = \fgets($f)) {
                 yield $line;
             }
         } finally {
-            fclose($f);
+            \fclose($f);
         }
     }
 }

@@ -1,55 +1,61 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\RAG\PostProcessor;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use NeuronAI\Chat\Messages\Message;
-use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
 
 class JinaRerankerPostProcessor implements PostProcessorInterface
 {
-    use HasGuzzleClient;
+    protected Client $client;
 
     public function __construct(
         protected string $key,
         protected string $model = 'jina-reranker-v2-base-multilingual',
-        protected int    $topN = 3
-    ) {}
+        protected int $topN = 3
+    ) {
+    }
 
-    public function initClient(): Client
+    protected function getClient(): Client
     {
-        return new Client([
+        return $this->client ?? $this->client = new Client([
             'base_uri' => 'https://api.jina.ai/v1/',
-            'headers'  => [
-                'Accept'        => 'application/json',
-                'Content-Type'  => 'application/json',
-                'Authorization' => 'Bearer ' . $this->key,
+            'headers' => [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer '.$this->key,
             ],
         ]);
     }
-
 
     public function process(Message $question, array $documents): array
     {
         $response = $this->getClient()->post('rerank', [
             RequestOptions::JSON => [
-                'model'            => $this->model,
-                'query'            => $question->getContent(),
-                'top_n'            => $this->topN,
-                'documents'        => array_map(fn(Document $document) => ['text' => $document->getContent()], $documents),
+                'model' => $this->model,
+                'query' => $question->getContent(),
+                'top_n' => $this->topN,
+                'documents' => \array_map(fn (Document $document): array => ['text' => $document->getContent()], $documents),
                 'return_documents' => false,
             ],
         ])->getBody()->getContents();
 
-        $result = json_decode($response, true);
+        $result = \json_decode($response, true);
 
-        return array_map(static function ($item) use ($documents) {
+        return \array_map(function (array $item) use ($documents): Document {
             $document = $documents[$item['index']];
             $document->setScore($item['relevance_score']);
-
             return $document;
         }, $result['results']);
+    }
+
+    public function setClient(Client $client): PostProcessorInterface
+    {
+        $this->client = $client;
+        return $this;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Providers\OpenAI;
 
 use NeuronAI\Chat\Attachments\Attachment;
@@ -20,6 +22,8 @@ class MessageMapper implements MessageMapperInterface
 
     public function map(array $messages): array
     {
+        $this->mapping = [];
+
         foreach ($messages as $message) {
             match ($message::class) {
                 Message::class,
@@ -44,7 +48,7 @@ class MessageMapper implements MessageMapperInterface
 
         $attachments = $message->getAttachments();
 
-        if (is_string($payload['content']) && $attachments) {
+        if (\is_string($payload['content']) && $attachments) {
             $payload['content'] = [
                 [
                     'type' => 'text',
@@ -55,7 +59,7 @@ class MessageMapper implements MessageMapperInterface
 
         foreach ($attachments as $attachment) {
             if ($attachment->type === AttachmentType::DOCUMENT) {
-                throw new ProviderException('OpenAI does not support document attachments.');
+                throw new ProviderException('This provider does not support document attachments.');
             }
 
             $payload['content'][] = $this->mapAttachment($attachment);

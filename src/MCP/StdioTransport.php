@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\MCP;
 
 class StdioTransport implements McpTransportInterface
 {
-    private $process;
-    private $pipes;
+    /** @var null|resource|false $process */
+    private mixed $process = null;
+    private ?array $pipes = null;
 
     /**
      * Create a new StdioTransport with the given configuration
@@ -35,7 +38,7 @@ class StdioTransport implements McpTransportInterface
         // Build command with arguments
         $commandLine = $command;
         foreach ($args as $arg) {
-            $commandLine .= ' ' . \escapeshellarg($arg);
+            $commandLine .= ' ' . \escapeshellarg((string) $arg);
         }
 
         // Start the process
@@ -55,7 +58,7 @@ class StdioTransport implements McpTransportInterface
         \stream_set_write_buffer($this->pipes[0], 0);
         \stream_set_read_buffer($this->pipes[1], 0);
 
-        // Check that process started successfully
+        // Check that the process started successfully
         $status = \proc_get_status($this->process);
         if (!$status['running']) {
             $error = \stream_get_contents($this->pipes[2]);
@@ -66,7 +69,7 @@ class StdioTransport implements McpTransportInterface
     /**
      * Send a request to the MCP server
      */
-    public function send($data): void
+    public function send(array $data): void
     {
         if (!\is_resource($this->process)) {
             throw new McpException("Process is not running");
@@ -111,11 +114,11 @@ class StdioTransport implements McpTransportInterface
             $status = \proc_get_status($this->process);
 
             if (!$status['running']) {
-                throw new McpException("MCP server process has terminated unexpectedly");
+                throw new McpException("MCP server process has terminated unexpectedly.");
             }
 
             $chunk = \fread($this->pipes[1], 4096);
-            if ($chunk !== false && strlen($chunk) > 0) {
+            if ($chunk !== false && \strlen($chunk) > 0) {
                 $response .= $chunk;
 
                 // Try to parse what we have so far
@@ -148,14 +151,12 @@ class StdioTransport implements McpTransportInterface
 
             // Try graceful termination first
             $status = \proc_get_status($this->process);
-            if ($status['running']) {
-                // On Unix systems, try sending SIGTERM
-                if (\function_exists('proc_terminate')) {
-                    \proc_terminate($this->process);
-
-                    // Give the process a moment to shut down gracefully
-                    \usleep(500000); // 500ms
-                }
+            // On Unix systems, try sending SIGTERM
+            if ($status['running'] && \function_exists('proc_terminate')) {
+                \proc_terminate($this->process);
+                // Give the process a moment to shut down gracefully
+                \usleep(500000);
+                // 500ms
             }
 
             // Close the process handle

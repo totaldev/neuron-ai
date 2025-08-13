@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests\Providers;
 
 use GuzzleHttp\Client;
@@ -56,11 +58,11 @@ class OllamaTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_chat_with_base64_image()
+    public function test_chat_with_base64_image(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -99,11 +101,11 @@ class OllamaTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_chat_with_url_image_fail()
+    public function test_chat_with_url_image_fail(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -127,7 +129,7 @@ class OllamaTest extends TestCase
         $provider->chat([$message]);
     }
 
-    public function test_tools_payload()
+    public function test_tools_payload(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -154,7 +156,7 @@ class OllamaTest extends TestCase
                 )
         ])->setClient($client);
 
-        $response = $provider->chat([new UserMessage('Hi')]);
+        $provider->chat([new UserMessage('Hi')]);
 
         // Ensure we sent one request
         $this->assertCount(1, $sentRequests);
@@ -191,6 +193,6 @@ class OllamaTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 }

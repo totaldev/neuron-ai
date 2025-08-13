@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests\VectorStore;
 
 use NeuronAI\RAG\Document;
@@ -40,7 +42,7 @@ class TypesenseTest extends TestCase
         ]);
 
         // embedding "Hello World!"
-        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
+        $this->embedding = \json_decode(\file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
     }
 
     public function test_typesense_instance(): void
@@ -63,5 +65,15 @@ class TypesenseTest extends TestCase
 
         $this->assertEquals($document->getContent(), $results[0]->getContent());
         $this->assertEquals($document->metadata['customProperty'], $results[0]->metadata['customProperty']);
+    }
+
+    public function test_delete_documents(): void
+    {
+        $store = new TypesenseVectorStore($this->client, 'test', $this->vectorDimension);
+
+        $store->deleteBySource('manual', 'manual');
+
+        $results = $store->similaritySearch($this->embedding);
+        $this->assertCount(0, $results);
     }
 }

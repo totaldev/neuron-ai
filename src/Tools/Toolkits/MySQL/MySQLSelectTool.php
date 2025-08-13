@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\MySQL;
 
 use NeuronAI\Tools\PropertyType;
@@ -7,6 +9,9 @@ use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 use PDO;
 
+/**
+ * @method static static make(PDO $pdo)
+ */
 class MySQLSelectTool extends Tool
 {
     protected array $allowedStatements = ['SELECT', 'WITH', 'SHOW', 'DESCRIBE', 'EXPLAIN'];
@@ -21,20 +26,23 @@ class MySQLSelectTool extends Tool
         parent::__construct(
             'execute_select_query',
             'Use this tool only to run SELECT query against the MySQL database.
-            This the tool to use only to gather information from the MySQL database.'
+This the tool to use only to gather information from the MySQL database.'
         );
+    }
 
-        $this->addProperty(
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'query',
                 PropertyType::STRING,
                 'The SELECT query you want to run against the database.',
                 true
             )
-        )->setCallable($this);
+        ];
     }
 
-    public function __invoke(string $query)
+    public function __invoke(string $query): string|array
     {
         if (!$this->validateReadOnly($query)) {
             return "The query was rejected for security reasons.
@@ -53,7 +61,7 @@ class MySQLSelectTool extends Tool
 
         // Check if it starts with allowed statements
         $firstKeyword = $this->getFirstKeyword($cleanQuery);
-        if (!in_array($firstKeyword, $this->allowedStatements)) {
+        if (!\in_array($firstKeyword, $this->allowedStatements)) {
             return false;
         }
 
@@ -70,17 +78,17 @@ class MySQLSelectTool extends Tool
     protected function sanitizeQuery(string $query): string
     {
         // Remove SQL comments
-        $query = preg_replace('/--.*$/m', '', $query);
-        $query = preg_replace('/\/\*.*?\*\//s', '', $query);
+        $query = \preg_replace('/--.*$/m', '', $query);
+        $query = \preg_replace('/\/\*.*?\*\//s', '', (string) $query);
 
         // Normalize whitespace
-        return preg_replace('/\s+/', ' ', trim($query));
+        return \preg_replace('/\s+/', ' ', \trim((string) $query));
     }
 
     protected function getFirstKeyword(string $query): string
     {
-        if (preg_match('/^\s*(\w+)/i', $query, $matches)) {
-            return strtoupper($matches[1]);
+        if (\preg_match('/^\s*(\w+)/i', $query, $matches)) {
+            return \strtoupper($matches[1]);
         }
         return '';
     }
@@ -88,6 +96,6 @@ class MySQLSelectTool extends Tool
     protected function containsKeyword(string $query, string $keyword): bool
     {
         // Use word boundaries to avoid false positives
-        return preg_match('/\b' . preg_quote($keyword, '/') . '\b/i', $query) === 1;
+        return \preg_match('/\b' . \preg_quote($keyword, '/') . '\b/i', $query) === 1;
     }
 }

@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Observability\Events;
 
 use NeuronAI\Chat\Messages\Message;
 
-class VectorStoreSearching
+class PreProcessed
 {
     public function __construct(
-        public Message $question
+        public string $processor,
+        public Message $processed
     ) {
     }
 }

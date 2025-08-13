@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Riza;
 
 use GuzzleHttp\Client;
@@ -8,6 +10,9 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Tools\Tool;
 
+/**
+ * @method static static make(string $pdo, string $language = 'PHP')
+ */
 class RizaCodeInterpreter extends Tool
 {
     protected Client $client;
@@ -22,39 +27,36 @@ class RizaCodeInterpreter extends Tool
             "execute_{$language}_code",
             "Execute {$language} scripts in a secure and isolated runtime environment."
         );
+    }
 
-        $this->addProperty(
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'code',
                 PropertyType::STRING,
                 'The code to execute.',
                 true,
-            )
-        )->addProperty(
+            ),
             new ToolProperty(
                 'args',
                 PropertyType::ARRAY,
                 "List of command line arguments to pass to the script (List of strings).",
                 false,
-            )
-        )->addProperty(
+            ),
             new ToolProperty(
                 'env',
                 PropertyType::ARRAY,
                 "Set of key-value pairs to add to the script's execution environment.",
                 false,
             )
-        )->setCallable($this);
+        ];
     }
 
     public function getClient(): Client
     {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-
-        return $this->client = new Client([
-            'base_uri' => trim($this->url, '/').'/',
+        return $this->client ?? $this->client = new Client([
+            'base_uri' => \trim($this->url, '/').'/',
             'headers' => [
                 'Authorization' => 'Bearer '.$this->key,
                 'Content-Type' => 'application/json; charset=utf-8',
@@ -67,7 +69,7 @@ class RizaCodeInterpreter extends Tool
         string $code,
         array $args = [],
         array $env = [],
-    ) {
+    ): mixed {
         $result = $this->getClient()->post('execute', [
             RequestOptions::JSON => [
                 'language' => $this->language,

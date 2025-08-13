@@ -1,10 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Workflow;
 
 class WorkflowState
 {
-    protected array $data = [];
+    public function __construct(protected array $data = [])
+    {
+    }
 
     public function set(string $key, mixed $value): void
     {

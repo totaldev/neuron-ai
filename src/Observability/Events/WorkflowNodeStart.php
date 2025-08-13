@@ -1,18 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Observability\Events;
 
-use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Workflow\WorkflowState;
 
 class WorkflowNodeStart
 {
-    /**
-     * @param string $node
-     * @param Message[] $messages
-     */
     public function __construct(
         public string $node,
-        public array $messages,
+        public WorkflowState $state,
     ) {
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests\Providers;
 
 use GuzzleHttp\Client;
@@ -65,11 +67,11 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_chat_with_url_image()
+    public function test_chat_with_url_image(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -108,11 +110,11 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_chat_with_base64_image()
+    public function test_chat_with_base64_image(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -152,11 +154,11 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_chat_with_url_document()
+    public function test_chat_with_url_document(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -195,11 +197,11 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_chat_with_base64_document()
+    public function test_chat_with_base64_document(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -239,11 +241,11 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
-    public function test_tools_payload()
+    public function test_tools_payload(): void
     {
         $sentRequests = [];
         $history = Middleware::history($sentRequests);
@@ -269,7 +271,7 @@ class GeminiTest extends TestCase
             ])
             ->setClient($client);
 
-        $response = $provider->chat([new UserMessage('Hi')]);
+        $provider->chat([new UserMessage('Hi')]);
 
         // Ensure we sent one request
         $this->assertCount(1, $sentRequests);
@@ -305,6 +307,6 @@ class GeminiTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, json_decode($request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 }

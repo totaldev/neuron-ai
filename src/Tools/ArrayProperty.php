@@ -1,17 +1,33 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools;
 
+use NeuronAI\Exceptions\ArrayPropertyException;
+use NeuronAI\StaticConstructor;
+
+/**
+ * @method static static make(string $name, string $description, bool $required = false, ?ToolPropertyInterface $items = null, ?int $minItems = null, ?int $maxItems = null)
+ */
 class ArrayProperty implements ToolPropertyInterface
 {
+    use StaticConstructor;
+
     protected PropertyType $type = PropertyType::ARRAY;
 
+    /**
+     * @throws ArrayPropertyException
+     */
     public function __construct(
         protected string $name,
-        protected string $description,
+        protected ?string $description = null,
         protected bool $required = false,
         protected ?ToolPropertyInterface $items = null,
+        protected ?int $minItems = null,
+        protected ?int $maxItems = null,
     ) {
+        $this->validateConstraints();
     }
 
     public function jsonSerialize(): array
@@ -29,11 +45,22 @@ class ArrayProperty implements ToolPropertyInterface
     {
         $schema = [
             'type' => $this->type->value,
-            'description' => $this->description,
         ];
 
-        if (!empty($this->items)) {
+        if (!\is_null($this->description)) {
+            $schema['description'] = $this->description;
+        }
+
+        if ($this->items instanceof ToolPropertyInterface) {
             $schema['items'] = $this->items->getJsonSchema();
+        }
+
+        if ($this->minItems !== null && $this->minItems !== 0) {
+            $schema['minItems'] = $this->minItems;
+        }
+
+        if ($this->maxItems !== null && $this->maxItems !== 0) {
+            $schema['maxItems'] = $this->maxItems;
         }
 
         return $schema;
@@ -54,7 +81,7 @@ class ArrayProperty implements ToolPropertyInterface
         return $this->type;
     }
 
-    public function getDescription(): string
+    public function getDescription(): ?string
     {
         return $this->description;
     }
@@ -62,5 +89,25 @@ class ArrayProperty implements ToolPropertyInterface
     public function getItems(): ?ToolPropertyInterface
     {
         return $this->items;
+    }
+
+    /**
+     * @throws ArrayPropertyException
+     */
+    protected function validateConstraints(): void
+    {
+        if ($this->minItems !== null && $this->minItems < 0) {
+            throw new ArrayPropertyException("minItems must be >= 0, got {$this->minItems}");
+        }
+
+        if ($this->maxItems !== null && $this->maxItems < 0) {
+            throw new ArrayPropertyException("maxItems must be >= 0, got {$this->maxItems}");
+        }
+
+        if ($this->minItems !== null && $this->maxItems !== null && $this->minItems > $this->maxItems) {
+            throw new ArrayPropertyException(
+                "minItems ({$this->minItems}) cannot be greater than maxItems ({$this->maxItems})"
+            );
+        }
     }
 }

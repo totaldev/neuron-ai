@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tests\Stubs;
 
 use NeuronAI\StructuredOutput\Validation\Rules\ArrayOf;

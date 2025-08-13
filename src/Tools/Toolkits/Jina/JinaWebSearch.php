@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Jina;
 
 use GuzzleHttp\Client;
@@ -8,6 +10,9 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\ToolProperty;
 use NeuronAI\Tools\Tool;
 
+/**
+ * @method static make(string $key, array $topics)
+ */
 class JinaWebSearch extends Tool
 {
     protected Client $client;
@@ -19,27 +24,26 @@ class JinaWebSearch extends Tool
         parent::__construct(
             'web_search',
             'Use this tool to search the web for additional information '.
-            (!empty($topics) ? 'about '.implode(', ', $topics).', or ' : '').
+            ($topics === [] ? '' : 'about '.\implode(', ', $topics).', or ').
             'if the question is outside the scope of the context you have.'
         );
+    }
 
-        $this->addProperty(
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'search_query',
                 PropertyType::STRING,
                 'The search query to perform web search.',
                 true
             )
-        )->setCallable($this);
+        ];
     }
 
     protected function getClient(): Client
     {
-        if (isset($this->client)) {
-            return $this->client;
-        }
-
-        return $this->client = new Client([
+        return $this->client ?? $this->client = new Client([
             'headers' => [
                 'Authorization' => 'Bearer '.$this->key,
                 'Content-Type' => 'application/json',

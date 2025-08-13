@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Observability\Events;
 
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\RAG\Document;
 
-class VectorStoreResult
+class Retrieved
 {
     /**
      * @param Document[] $documents

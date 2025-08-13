@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits;
 
 use NeuronAI\StaticConstructor;
@@ -10,6 +12,7 @@ abstract class AbstractToolkit implements ToolkitInterface
     use StaticConstructor;
 
     protected array $exclude = [];
+    protected array $only = [];
 
     public function guidelines(): ?string
     {
@@ -17,12 +20,20 @@ abstract class AbstractToolkit implements ToolkitInterface
     }
 
     /**
-     * @param string[] $classes
-     * @return ToolkitInterface
+     * @param  class-string[]  $classes
      */
     public function exclude(array $classes): ToolkitInterface
     {
         $this->exclude = $classes;
+        return $this;
+    }
+
+    /**
+     * @param  class-string[]  $classes
+     */
+    public function only(array $classes): ToolkitInterface
+    {
+        $this->only = $classes;
         return $this;
     }
 
@@ -33,10 +44,14 @@ abstract class AbstractToolkit implements ToolkitInterface
 
     public function tools(): array
     {
-        if (empty($this->exclude)) {
+        if ($this->exclude === [] && $this->only === []) {
             return $this->provide();
         }
 
-        return \array_filter($this->provide(), fn (ToolInterface $tool) => !in_array($tool::class, $this->exclude));
+        return \array_filter(
+            $this->provide(),
+            fn (ToolInterface $tool): bool => !\in_array($tool::class, $this->exclude)
+                && ($this->only === [] || \in_array($tool::class, $this->only))
+        );
     }
 }

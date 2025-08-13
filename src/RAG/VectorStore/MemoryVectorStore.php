@@ -1,15 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\RAG\VectorStore;
 
 use NeuronAI\Exceptions\VectorStoreException;
 use NeuronAI\RAG\Document;
-use NeuronAI\RAG\VectorStore\Search\SimilaritySearch;
-use function array_keys;
-use function array_merge;
-use function array_reduce;
-use function array_slice;
-use function asort;
 
 class MemoryVectorStore implements VectorStoreInterface
 {
@@ -18,50 +14,48 @@ class MemoryVectorStore implements VectorStoreInterface
      */
     private array $documents = [];
 
-    public function __construct(protected int $topK = 4) {}
+    public function __construct(protected int $topK = 4)
+    {
+    }
 
-    public function addDocument(Document $document): void
+    public function addDocument(Document $document): VectorStoreInterface
     {
         $this->documents[] = $document;
+        return $this;
     }
 
-    public function addDocuments(array $documents): void
+    public function addDocuments(array $documents): VectorStoreInterface
     {
-        $this->documents = array_merge($this->documents, $documents);
+        $this->documents = \array_merge($this->documents, $documents);
+        return $this;
     }
 
-    /**
-     * @throws VectorStoreException
-     */
-    public function cosineSimilarity(array $vector1, array $vector2): float
+    public function deleteBySource(string $sourceType, string $sourceName): VectorStoreInterface
     {
-        return SimilaritySearch::cosine($vector1, $vector2);
+        $this->documents = \array_filter($this->documents, fn (Document $document): bool => $document->getSourceType() !== $sourceType || $document->getSourceName() !== $sourceName);
+        return $this;
     }
 
-    /**
-     * @throws VectorStoreException
-     */
     public function similaritySearch(array $embedding): array
     {
         $distances = [];
 
         foreach ($this->documents as $index => $document) {
-            if (empty($document->embedding)) {
+            if ($document->embedding === []) {
                 throw new VectorStoreException("Document with the following content has no embedding: {$document->getContent()}");
             }
-            $dist = $this->cosineSimilarity($embedding, $document->getEmbedding());
+            $dist = VectorSimilarity::cosineDistance($embedding, $document->getEmbedding());
             $distances[$index] = $dist;
         }
 
-        asort($distances); // Sort by distance (ascending).
+        \asort($distances); // Sort by distance (ascending).
 
-        $topKIndices = array_slice(array_keys($distances), 0, $this->topK, true);
+        $topKIndices = \array_slice(\array_keys($distances), 0, $this->topK, true);
 
-        return array_reduce($topKIndices, function ($carry, $index) use ($distances) {
+        return \array_reduce($topKIndices, function (array $carry, int $index) use ($distances): array {
             $document = $this->documents[$index];
-            $document->setScore(1 - $distances[$index]);
+            $document->setScore(VectorSimilarity::similarityFromDistance($distances[$index]));
             $carry[] = $document;
-
             return $carry;
         }, []);
     }

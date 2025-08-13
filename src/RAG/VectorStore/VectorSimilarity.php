@@ -1,12 +1,14 @@
 <?php
 
-namespace NeuronAI\RAG\VectorStore\Search;
+declare(strict_types=1);
+
+namespace NeuronAI\RAG\VectorStore;
 
 use NeuronAI\Exceptions\VectorStoreException;
 
-class SimilaritySearch
+class VectorSimilarity
 {
-    public static function cosine(array $vector1, array $vector2): float|int
+    public static function cosineSimilarity(array $vector1, array $vector2): float|int
     {
         if (\count($vector1) !== \count($vector2)) {
             throw new VectorStoreException('Vectors must have the same length to apply cosine similarity.');
@@ -31,6 +33,16 @@ class SimilaritySearch
             return 0.0;
         }
 
-        return 1 - $dotProduct / (sqrt($magnitude1) * sqrt($magnitude2));
+        return $dotProduct / (\sqrt($magnitude1) * \sqrt($magnitude2));
+    }
+
+    public static function cosineDistance(array $vector1, array $vector2): float|int
+    {
+        return 1 - self::cosineSimilarity($vector1, $vector2);
+    }
+
+    public static function similarityFromDistance(float|int $distance): float|int
+    {
+        return 1 - $distance;
     }
 }

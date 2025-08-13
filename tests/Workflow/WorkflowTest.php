@@ -45,7 +45,7 @@ class WorkflowTest extends TestCase
         $this->assertEquals('end', $result->get('step'));
     }
 
-    public function test_workflow_multiple_nodes()
+    public function test_workflow_multiple_nodes(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -62,7 +62,7 @@ class WorkflowTest extends TestCase
         $this->assertEquals(1, $result->get('counter'));
     }
 
-    public function testWorkflowWithConditionalEdges()
+    public function testWorkflowWithConditionalEdges(): void
     {
         $workflow = new Workflow();
         $workflow->addNodes([
@@ -77,12 +77,12 @@ class WorkflowTest extends TestCase
                 new Edge(
                     ConditionalNode::class,
                     MiddleNode::class,
-                    fn (WorkflowState $state) => $state->get('should_loop', false)
+                    fn (WorkflowState $state): mixed => $state->get('should_loop', false)
                 ),
                 new Edge(
                     ConditionalNode::class,
                     FinishNode::class,
-                    fn (WorkflowState $state) => !$state->get('should_loop', false)
+                    fn (WorkflowState $state): bool => !$state->get('should_loop', false)
                 )
             ])
             ->setStart(StartNode::class)
@@ -95,7 +95,7 @@ class WorkflowTest extends TestCase
         $this->assertFalse($result->get('should_loop'));
     }
 
-    public function test_validation_throws_exception_when_start_node_not_set()
+    public function test_validation_throws_exception_when_start_node_not_set(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -109,7 +109,7 @@ class WorkflowTest extends TestCase
         $workflow->run();
     }
 
-    public function test_validation_throws_exception_when_end_node_not_set()
+    public function test_validation_throws_exception_when_end_node_not_set(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -123,7 +123,7 @@ class WorkflowTest extends TestCase
         $workflow->run();
     }
 
-    public function test_validation_throws_exception_when_start_node_does_not_exist()
+    public function test_validation_throws_exception_when_start_node_does_not_exist(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new FinishNode())
@@ -132,12 +132,12 @@ class WorkflowTest extends TestCase
             ->setEnd(FinishNode::class);
 
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("Start node 'StartNode' does not exist");
+        $this->expectExceptionMessage("Start node ".StartNode::class." does not exist");
 
         $workflow->run();
     }
 
-    public function test_validation_throws_exception_when_end_node_does_not_exist()
+    public function test_validation_throws_exception_when_end_node_does_not_exist(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -146,12 +146,12 @@ class WorkflowTest extends TestCase
             ->setEnd(FinishNode::class);
 
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("End node 'FinishNode' does not exist");
+        $this->expectExceptionMessage("End node ".FinishNode::class." does not exist");
 
         $workflow->run();
     }
 
-    public function test_validation_throws_exception_when_edge_from_node_does_not_exist()
+    public function test_validation_throws_exception_when_edge_from_node_does_not_exist(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new FinishNode())
@@ -160,12 +160,12 @@ class WorkflowTest extends TestCase
             ->setEnd(FinishNode::class);
 
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("Edge from node 'StartNode' does not exist");
+        $this->expectExceptionMessage("Edge from node ".StartNode::class." does not exist");
 
         $workflow->run();
     }
 
-    public function test_validation_throws_exception_when_edge_to_node_does_not_exist()
+    public function test_validation_throws_exception_when_edge_to_node_does_not_exist(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -174,12 +174,12 @@ class WorkflowTest extends TestCase
             ->setEnd(StartNode::class);
 
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("Edge to node 'FinishNode' does not exist");
+        $this->expectExceptionMessage("Edge to node ".FinishNode::class." does not exist");
 
         $workflow->run();
     }
 
-    public function test_execution_throws_exception_when_no_valid_edge_found()
+    public function test_execution_throws_exception_when_no_valid_edge_found(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -187,18 +187,18 @@ class WorkflowTest extends TestCase
             ->addEdge(new Edge(
                 StartNode::class,
                 FinishNode::class,
-                fn (WorkflowState $state) => false
+                fn (WorkflowState $state): bool => false
             ))
             ->setStart(StartNode::class)
             ->setEnd(FinishNode::class);
 
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("No valid edge found from node 'StartNode'");
+        $this->expectExceptionMessage("No valid edge found from node ".StartNode::class);
 
         $workflow->run();
     }
 
-    public function testMermaidExport()
+    public function testMermaidExport(): void
     {
         $workflow = new Workflow();
         $workflow->addNode(new StartNode())
@@ -216,7 +216,7 @@ class WorkflowTest extends TestCase
         $this->assertStringContainsString('MiddleNode --> FinishNode', $mermaid);
     }
 
-    public function test_custom_exporter()
+    public function test_custom_exporter(): void
     {
         $customExporter = new class () implements ExporterInterface {
             public function export(Workflow $graph): string
@@ -232,7 +232,7 @@ class WorkflowTest extends TestCase
         $this->assertEquals('custom export', $result);
     }
 
-    public function test_workflow_state_data_management()
+    public function test_workflow_state_data_management(): void
     {
         $state = new WorkflowState();
 
@@ -249,7 +249,7 @@ class WorkflowTest extends TestCase
         $this->assertEquals(['key1' => 'value1', 'key2' => 42], $all);
     }
 
-    public function test_edge_condition_evaluation()
+    public function test_edge_condition_evaluation(): void
     {
         $state = new WorkflowState();
         $state->set('test_value', true);
@@ -257,7 +257,7 @@ class WorkflowTest extends TestCase
         $edge = new Edge(
             StartNode::class,
             FinishNode::class,
-            fn (WorkflowState $s) => $s->get('test_value', false)
+            fn (WorkflowState $s): mixed => $s->get('test_value', false)
         );
 
         $this->assertTrue($edge->shouldExecute($state));
@@ -266,7 +266,7 @@ class WorkflowTest extends TestCase
         $this->assertFalse($edge->shouldExecute($state));
     }
 
-    public function test_edge_without_condition()
+    public function test_edge_without_condition(): void
     {
         $state = new WorkflowState();
         $edge = new Edge(StartNode::class, FinishNode::class);
@@ -274,7 +274,7 @@ class WorkflowTest extends TestCase
         $this->assertTrue($edge->shouldExecute($state));
     }
 
-    public function test_get_edges_and_nodes()
+    public function test_get_edges_and_nodes(): void
     {
         $workflow = new Workflow();
         $startNode = new StartNode();
@@ -292,7 +292,7 @@ class WorkflowTest extends TestCase
         $this->assertSame($edge, $edges[0]);
 
         $this->assertCount(2, $nodes);
-        $this->assertSame($startNode, $nodes['StartNode']);
-        $this->assertSame($endNode, $nodes['FinishNode']);
+        $this->assertSame($startNode, $nodes[StartNode::class]);
+        $this->assertSame($endNode, $nodes[FinishNode::class]);
     }
 }

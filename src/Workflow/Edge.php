@@ -1,27 +1,16 @@
 <?php
 
-namespace NeuronAI\Workflow;
+declare(strict_types=1);
 
-use ReflectionClass;
+namespace NeuronAI\Workflow;
 
 class Edge
 {
-    private string $from;
-    private string $to;
-
     public function __construct(
-        string $fromClass,
-        string $toClass,
-        private ?\Closure $condition = null
+        protected string $from,
+        protected string $to,
+        protected ?\Closure $condition = null
     ) {
-        $this->from = $this->getShortClassName($fromClass);
-        $this->to = $this->getShortClassName($toClass);
-    }
-
-    private function getShortClassName(string $fullyQualifiedClass): string
-    {
-        $reflection = new ReflectionClass($fullyQualifiedClass);
-        return $reflection->getShortName();
     }
 
     public function getFrom(): string
@@ -34,12 +23,13 @@ class Edge
         return $this->to;
     }
 
+    public function hasCondition(): bool
+    {
+        return $this->condition instanceof \Closure;
+    }
+
     public function shouldExecute(WorkflowState $state): bool
     {
-        if ($this->condition === null) {
-            return true;
-        }
-
-        return ($this->condition)($state);
+        return $this->hasCondition() ? ($this->condition)($state) : true;
     }
 }

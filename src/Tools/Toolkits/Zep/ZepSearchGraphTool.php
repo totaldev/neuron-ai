@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Tools\Toolkits\Zep;
 
 use GuzzleHttp\RequestOptions;
@@ -9,6 +11,8 @@ use NeuronAI\Tools\ToolProperty;
 
 /**
  * https://help.getzep.com/sdk-reference/graph/search
+ *
+ * @method static static make(string $key, string $user_id)
  */
 class ZepSearchGraphTool extends Tool
 {
@@ -21,17 +25,21 @@ class ZepSearchGraphTool extends Tool
         parent::__construct(
             'search_knowledge_graph',
             'Searches the knowledge graph for relevant facts or nodes.
-            Use this tool if you need to retrieve user information that can help you provide more accurate answers.'
+Use this tool if you need to retrieve user information that can help you provide more accurate answers.'
         );
 
-        $this->addProperty(
+        $this->createUser();
+    }
+
+    protected function properties(): array
+    {
+        return [
             new ToolProperty(
                 'query',
                 PropertyType::STRING,
                 'The search term to find relevant facts or nodes',
                 true
-            )
-        )->addProperty(
+            ),
             new ToolProperty(
                 'search_scope',
                 PropertyType::STRING,
@@ -39,9 +47,7 @@ class ZepSearchGraphTool extends Tool
                 false,
                 ['facts', 'nodes']
             )
-        )->setCallable($this);
-
-        $this->createUser();
+        ];
     }
 
     public function __invoke(string $query, string $search_scope = 'facts', int $limit = 5): array
@@ -65,21 +71,17 @@ class ZepSearchGraphTool extends Tool
 
     protected function mapEdges(array $edges): array
     {
-        return \array_map(function (array $edge) {
-            return [
-                'fact' => $edge['fact'],
-                'created_at' => $edge['created_at'],
-            ];
-        }, $edges);
+        return \array_map(fn (array $edge): array => [
+            'fact' => $edge['fact'],
+            'created_at' => $edge['created_at'],
+        ], $edges);
     }
 
     protected function mapNodes(array $nodes): array
     {
-        return \array_map(function (array $node) {
-            return [
-                'name' => $node['name'],
-                'summary' => $node['summary'],
-            ];
-        }, $nodes);
+        return \array_map(fn (array $node): array => [
+            'name' => $node['name'],
+            'summary' => $node['summary'],
+        ], $nodes);
     }
 }

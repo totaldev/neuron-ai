@@ -1,42 +1,60 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\RAG\VectorStore;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
-use NeuronAI\HasGuzzleClient;
 use NeuronAI\RAG\Document;
 
 class ChromaVectorStore implements VectorStoreInterface
 {
-    use HasGuzzleClient;
+    protected Client $client;
 
     public function __construct(
         protected string $collection,
         protected string $host = 'http://localhost:8000',
-        protected int    $topK = 5,
-    ) {}
-
-    public function addDocument(Document $document): void
-    {
-        $this->addDocuments([$document]);
+        protected int $topK = 5,
+    ) {
     }
 
-    public function addDocuments(array $documents): void
+    protected function getClient(): Client
+    {
+        return $this->client ?? $this->client = new Client([
+            'base_uri' => \trim($this->host, '/')."/api/v1/collections/{$this->collection}/",
+            'headers' => [
+                'Content-Type' => 'application/json',
+            ]
+        ]);
+    }
+
+    public function addDocument(Document $document): VectorStoreInterface
+    {
+        return $this->addDocuments([$document]);
+    }
+
+    public function deleteBySource(string $sourceType, string $sourceName): VectorStoreInterface
+    {
+        $this->getClient()->post('delete', [
+            RequestOptions::JSON => [
+                'where' => [
+                    'sourceType' => $sourceType,
+                    'sourceName' => $sourceName,
+                ]
+            ]
+        ]);
+
+        return $this;
+    }
+
+    public function addDocuments(array $documents): VectorStoreInterface
     {
         $this->getClient()->post('upsert', [
             RequestOptions::JSON => $this->mapDocuments($documents),
-        ])->getBody()->getContents();
-    }
-
-    public function initClient(): Client
-    {
-        return new Client([
-            'base_uri' => trim($this->host, '/') . "/api/v1/collections/{$this->collection}/",
-            'headers'  => [
-                'Content-Type' => 'application/json',
-            ],
         ]);
+
+        return $this;
     }
 
     public function similaritySearch(array $embedding): iterable
@@ -44,26 +62,26 @@ class ChromaVectorStore implements VectorStoreInterface
         $response = $this->getClient()->post('query', [
             RequestOptions::JSON => [
                 'queryEmbeddings' => $embedding,
-                'nResults'        => $this->topK,
-            ],
+                'nResults' => $this->topK,
+            ]
         ])->getBody()->getContents();
 
-        $response = json_decode($response, true);
+        $response = \json_decode($response, true);
 
         // Map the result
-        $size = count($response['distances']);
+        $size = \count($response['distances']);
         $result = [];
         for ($i = 0; $i < $size; $i++) {
             $document = new Document();
-            $document->id = $response['ids'][$i] ?? uniqid();
+            $document->id = $response['ids'][$i] ?? \uniqid();
             $document->embedding = $response['embeddings'][$i];
             $document->content = $response['documents'][$i];
             $document->sourceType = $response['metadatas'][$i]['sourceType'] ?? null;
             $document->sourceName = $response['metadatas'][$i]['sourceName'] ?? null;
-            $document->score = $response['distances'][$i];
+            $document->score = VectorSimilarity::similarityFromDistance($response['distances'][$i]);
 
             foreach ($response['metadatas'][$i] as $name => $value) {
-                if (!in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
+                if (!\in_array($name, ['content', 'sourceType', 'sourceName', 'score', 'embedding', 'id'])) {
                     $document->addMetadata($name, $value);
                 }
             }
@@ -76,17 +94,16 @@ class ChromaVectorStore implements VectorStoreInterface
 
     /**
      * @param Document[] $documents
-     * @return array
      */
     protected function mapDocuments(array $documents): array
     {
         $payload = [
-            'ids'        => [],
-            'documents'  => [],
+            'ids' => [],
+            'documents' => [],
             'embeddings' => [],
-            'metadatas'  => [],
-
+            'metadatas' => [],
         ];
+
         foreach ($documents as $document) {
             $payload['ids'][] = $document->getId();
             $payload['documents'][] = $document->getContent();

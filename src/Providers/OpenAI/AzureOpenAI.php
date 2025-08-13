@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Providers\OpenAI;
 
 use GuzzleHttp\Client;
@@ -13,31 +15,27 @@ class AzureOpenAI extends OpenAI
         protected string $endpoint,
         protected string $model,
         protected string $version,
-        protected array  $parameters = [],
+        protected array $parameters = [],
     ) {
         $this->setBaseUrl();
-        parent::__construct($this->key, $this->model, $this->parameters);
-    }
 
-    public function initClient(): Client
-    {
-        return new Client([
+        $this->client = new Client([
             'base_uri' => $this->baseUri,
             'query'    => [
                 'api-version' => $this->version,
             ],
-            'headers'  => [
-                'Authorization' => 'Bearer ' . $this->key,
-                'Accept'        => 'application/json',
-                'Content-Type'  => 'application/json',
+            'headers' => [
+                'Authorization' => 'Bearer '.$this->key,
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
             ],
         ]);
     }
 
-    private function setBaseUrl()
+    private function setBaseUrl(): void
     {
-        $this->endpoint = preg_replace('/^https?:\/\/([^\/]*)\/?$/', '$1', $this->endpoint);
-        $this->baseUri = sprintf($this->baseUri, $this->endpoint, $this->model);
-        $this->baseUri = trim($this->baseUri, '/') . '/';
+        $this->endpoint = \preg_replace('/^https?:\/\/([^\/]*)\/?$/', '$1', $this->endpoint);
+        $this->baseUri = \sprintf($this->baseUri, $this->endpoint, $this->model);
+        $this->baseUri = \trim($this->baseUri, '/').'/';
     }
 }
