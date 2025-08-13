@@ -97,13 +97,15 @@ class McpClient
      */
     public function callTool(string $toolName, array $arguments = []): array
     {
+        $arguments = \array_filter($arguments, fn (mixed $value): bool => ! \is_null($value));
+
         $request = [
             "jsonrpc" => "2.0",
             "id" => ++$this->requestId,
             "method" => "tools/call",
             "params" => [
                 "name" => $toolName,
-                "arguments" => \array_filter($arguments)
+                ...($arguments !== [] ? ['arguments' => $arguments] : [])
             ]
         ];
 
