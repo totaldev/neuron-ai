@@ -34,7 +34,7 @@ trait HandleChat
             $json['tools'] = $this->generateToolsPayload();
         }
 
-        return $this->client->postAsync(trim($this->baseUri, '/')."/{$this->model}:generateContent", compact('json'))
+        return $this->getClient()->postAsync(trim($this->baseUri, '/')."/{$this->model}:generateContent", compact('json'))
             ->then(function (ResponseInterface $response) {
                 $result = \json_decode($response->getBody()->getContents(), true);
 
