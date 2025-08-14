@@ -15,6 +15,7 @@ trait HttpClient
         return $this->client ?? $this->client = new Client([
             'base_uri' => 'https://api.supadata.ai/v1/',
             'headers' => [
+                'Content-Type' => 'application/json',
                 'x-api-key' => $key,
             ]
         ]);
