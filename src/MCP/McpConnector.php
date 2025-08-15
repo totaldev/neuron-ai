@@ -109,7 +109,7 @@ class McpConnector
         foreach ($item['inputSchema']['properties'] as $name => $prop) {
             $required = \in_array($name, $item['inputSchema']['required'] ?? []);
 
-            $type = PropertyType::fromSchema($prop['type']);
+            $type = PropertyType::fromSchema($prop['type']??PropertyType::STRING->value);
 
             $property = match ($type) {
                 PropertyType::ARRAY => $this->createArrayProperty($name, $required, $prop),
