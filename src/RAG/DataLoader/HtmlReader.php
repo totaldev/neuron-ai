@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\RAG\DataLoader;
 
 use Html2Text\Html2Text;
