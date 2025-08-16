@@ -6,7 +6,6 @@ namespace NeuronAI\Chat\History;
 
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolCallResultMessage;
-use NeuronAI\Tools\ToolInterface;
 
 class TokenCounter implements TokenCounterInterface
 {
