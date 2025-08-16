@@ -59,7 +59,7 @@ class MessageMapper implements MessageMapperInterface
 
         foreach ($attachments as $attachment) {
             if ($attachment->type === AttachmentType::DOCUMENT) {
-                if($attachment->contentType === AttachmentContentType::URL){
+                if ($attachment->contentType === AttachmentContentType::URL) {
                     // OpenAI does not support URL type
                     throw new ProviderException('This provider does not support URL document attachments.');
                 }
@@ -80,9 +80,9 @@ class MessageMapper implements MessageMapperInterface
         return [
             'type' => 'file',
             'file' => [
-                'file_data' => 'data:'.$attachment->mediaType.';base64,'.$attachment->content,
-                // Problem: filename is required, but Document does not have a filename property. Could it be added? Otherwise, it would have to be faked based on mediaType.
-                //'filename' => "attachment.pdf"
+                // The filename is required, but the Document class does not have a filename property.
+                'filename' => "attachment-".\uniqid().".pdf",
+                'file_data' => "data:{$attachment->mediaType};base64,{$attachment->content}",
             ]
         ];
     }
