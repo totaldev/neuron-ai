@@ -10,8 +10,6 @@ class HtmlReader implements ReaderInterface
 {
     /**
      * Return the Markdown version of a web page content.
-     *
-     * @param string $filePath It can be a URL or a local file path
      */
     public static function getText(string $filePath, array $options = []): string
     {
