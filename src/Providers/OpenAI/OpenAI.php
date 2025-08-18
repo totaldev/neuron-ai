@@ -7,6 +7,7 @@ namespace NeuronAI\Providers\OpenAI;
 use GuzzleHttp\Client;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
@@ -98,6 +99,10 @@ class OpenAI implements AIProviderInterface
         }, $this->tools);
     }
 
+    /**
+     * @param array<string, mixed> $message
+     * @throws ProviderException
+     */
     protected function createToolCallMessage(array $message): Message
     {
         $tools = \array_map(

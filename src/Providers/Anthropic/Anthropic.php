@@ -7,6 +7,7 @@ namespace NeuronAI\Providers\Anthropic;
 use GuzzleHttp\Client;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
@@ -87,20 +88,24 @@ class Anthropic implements AIProviderInterface
         }, $this->tools);
     }
 
-    public function createToolCallMessage(array $content): Message
+    /**
+     * @param array<string, mixed> $message
+     * @throws ProviderException
+     */
+    public function createToolCallMessage(array $message): Message
     {
-        $tool = $this->findTool($content['name'])
-            ->setInputs($content['input'])
-            ->setCallId($content['id']);
+        $tool = $this->findTool($message['name'])
+            ->setInputs($message['input'])
+            ->setCallId($message['id']);
 
         // During serialization and deserialization PHP convert the original empty object {} to empty array []
         // causing an error on the Anthropic API. If there are no inputs, we need to restore the empty JSON object.
-        if (empty($content['input'])) {
-            $content['input'] = new \stdClass();
+        if (empty($message['input'])) {
+            $message['input'] = new \stdClass();
         }
 
         return new ToolCallMessage(
-            [$content],
+            [$message],
             [$tool] // Anthropic call one tool at a time. So we pass an array with one element.
         );
     }

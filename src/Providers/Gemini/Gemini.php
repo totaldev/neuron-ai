@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
@@ -100,6 +101,10 @@ class Gemini implements AIProviderInterface
         ];
     }
 
+    /**
+     * @param array<string, mixed> $message
+     * @throws ProviderException
+     */
     protected function createToolCallMessage(array $message): Message
     {
         $tools = \array_map(function (array $item): ?\NeuronAI\Tools\ToolInterface {
