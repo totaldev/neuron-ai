@@ -11,6 +11,7 @@ use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
+use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\MessageMapperInterface;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\ToolPropertyInterface;
@@ -41,15 +42,22 @@ class OpenAI implements AIProviderInterface
         protected string $key,
         protected string $model,
         protected array $parameters = [],
+        protected ?HttpClientOptions $httpOptions = null,
     ) {
-        $this->client = new Client([
+        $config = [
             'base_uri' => \trim($this->baseUri, '/').'/',
             'headers' => [
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'Authorization' => 'Bearer ' . $this->key,
             ]
-        ]);
+        ];
+
+        if ($this->httpOptions instanceof HttpClientOptions) {
+            $config = $this->mergeHttpOptions($config, $this->httpOptions);
+        }
+
+        $this->client = new Client($config);
     }
 
     public function systemPrompt(?string $prompt): AIProviderInterface

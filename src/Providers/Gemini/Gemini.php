@@ -12,6 +12,7 @@ use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
+use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\MessageMapperInterface;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\ToolPropertyInterface;
@@ -41,8 +42,9 @@ class Gemini implements AIProviderInterface
         protected string $key,
         protected string $model,
         protected array $parameters = [],
+        protected ?HttpClientOptions $httpOptions = null,
     ) {
-        $this->client = new Client([
+        $config = [
             // Since Gemini use colon ":" into the URL guzzle fire an exception using base_uri configuration.
             //'base_uri' => trim($this->baseUri, '/').'/',
             'headers' => [
@@ -50,7 +52,13 @@ class Gemini implements AIProviderInterface
                 'Content-Type' => 'application/json',
                 'x-goog-api-key' => $this->key,
             ]
-        ]);
+        ];
+
+        if ($this->httpOptions instanceof HttpClientOptions) {
+            $config = $this->mergeHttpOptions($config, $this->httpOptions);
+        }
+
+        $this->client = new Client($config);
     }
 
     public function systemPrompt(?string $prompt): AIProviderInterface
