@@ -16,8 +16,8 @@ interface EvaluatorInterface
     /**
      * Evaluate the output against expected results
      * @param mixed $output Output from run() method
-     * @param array<string, mixed> $reference Reference dataset item for comparison
+     * @param array<string, mixed> $datasetItem Reference dataset item for comparison
      * @return bool Whether the test passed
      */
-    public function evaluate(mixed $output, array $reference): bool;
+    public function evaluate(mixed $output, array $datasetItem): bool;
 }

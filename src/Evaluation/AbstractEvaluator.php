@@ -17,11 +17,11 @@ abstract class AbstractEvaluator implements EvaluatorInterface
 
     /**
      * Evaluate the output against expected results
-     * @param mixed $output Output from run() method
-     * @param array<string, mixed> $reference Reference dataset item for comparison
+     * @param mixed $output Output from the run () method
+     * @param array<string, mixed> $datasetItem Reference dataset item for comparison
      * @return bool Whether the test passed
      */
-    abstract public function evaluate(mixed $output, array $reference): bool;
+    abstract public function evaluate(mixed $output, array $datasetItem): bool;
 
     /**
      * Assert that a string contains a substring
