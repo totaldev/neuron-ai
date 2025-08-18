@@ -59,4 +59,24 @@ class AssertionFailure
             $this->message
         );
     }
+
+    /**
+     * Check if this is an AI Judge assertion failure
+     */
+    public function isAIJudgeFailure(): bool
+    {
+        return $this->assertionMethod === 'assertWithAIJudge';
+    }
+
+    /**
+     * Get AI Judge score instance if available
+     */
+    public function getAIJudgeScore(): ?JudgeScore
+    {
+        if (!$this->isAIJudgeFailure()) {
+            return null;
+        }
+
+        return $this->context['judge_score'] ?? null;
+    }
 }

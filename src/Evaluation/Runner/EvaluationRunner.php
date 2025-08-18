@@ -13,6 +13,11 @@ class EvaluationRunner
 {
     public function run(EvaluatorInterface $evaluator): EvaluationSummary
     {
+        // Call setUp before starting evaluation
+        if (\method_exists($evaluator, 'setUp')) {
+            $evaluator->setUp();
+        }
+
         $dataset = $evaluator->getDataset();
         $data = $dataset->load();
         $results = [];

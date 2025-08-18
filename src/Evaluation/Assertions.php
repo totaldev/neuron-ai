@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronAI\Evaluation;
 
+use NeuronAI\AgentInterface;
+use NeuronAI\Chat\Messages\UserMessage;
+use Throwable;
+
 class Assertions
 {
     private int $assertionsPassed = 0;
@@ -201,7 +205,7 @@ class Assertions
      */
     protected function assertNotEmpty(string $response): bool
     {
-        $result = !in_array(\trim($response), ['', '0'], true);
+        $result = !\in_array(\trim($response), ['', '0'], true);
         return $this->recordAssertion(
             $result,
             __FUNCTION__,
@@ -223,5 +227,51 @@ class Assertions
             $result ? '' : 'Expected valid JSON response: ' . \json_last_error_msg(),
             ['response' => $response, 'json_error' => \json_last_error_msg()]
         );
+    }
+
+    /**
+     * Assert using an AI judge agent
+     */
+    protected function assertWithAIJudge(
+        AgentInterface $judgeAgent,
+        string $output,
+        float $threshold = 0.7
+    ): bool {
+        try {
+            $score = $judgeAgent->structured(
+                new UserMessage($this->buildJudgePrompt($output)),
+                JudgeScore::class
+            );
+
+            $result = $score->score >= $threshold;
+
+            return $this->recordAssertion(
+                $result,
+                __FUNCTION__,
+                $result ? '' : "AI Judge failed: {$score->reasoning} (Score: {$score->score}, Threshold: {$threshold})",
+                [
+                    'judge_score' => $score,
+                    'threshold' => $threshold,
+                    'output' => $output
+                ]
+            );
+        } catch (Throwable $e) {
+            return $this->recordAssertion(
+                false,
+                __FUNCTION__,
+                "AI Judge error: {$e->getMessage()}",
+                ['error' => $e->getMessage(), 'output' => $output]
+            );
+        }
+    }
+
+    /**
+     * Build the prompt for AI judge evaluation
+     */
+    private function buildJudgePrompt(string $output): string
+    {
+        return "Evaluate the following output:\n\n" .
+               "OUTPUT:\n{$output}\n\n" .
+               "Provide a score between 0.0 and 1.0, detailed reasoning, and whether it passes.";
     }
 }
