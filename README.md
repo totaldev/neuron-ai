@@ -7,7 +7,7 @@
 
 [**Video Tutorial**](https://www.youtube.com/watch?v=oSA1bP_j41w)
 
-[![Neuron & Inspector](pages/images/youtube.png)](https://www.youtube.com/watch?v=oSA1bP_j41w)
+[![Neuron & Inspector](./docs/images/youtube.png)](https://www.youtube.com/watch?v=oSA1bP_j41w)
 
 ---
 
@@ -143,7 +143,7 @@ INSPECTOR_INGESTION_KEY=fwe45gtxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 After configuring the environment variable, you will see the agent execution timeline in your Inspector dashboard.
 
-![](pages/images/neuron-observability.avif)
+![](./docs/images/neuron-observability.avif)
 
 Learn more about Monitoring in the [documentation](https://docs.neuron-ai.dev/advanced/observability).
 
@@ -413,7 +413,7 @@ class SimpleWorkflow extends Workflow
 }
 ```
 
-[![NeuronAI Workflow](pages/images/workflow.avif)](https://docs.neuron-ai.dev/workflow/getting-started)
+[![NeuronAI Workflow](./docs/images/workflow.avif)](https://docs.neuron-ai.dev/workflow/getting-started)
 
 Neuron Workflow supports a robust [**human-in-the-loop**](https://docs.neuron-ai.dev/workflow/human-in-the-loop)
 pattern, enabling human intervention at any point in an automated process. This is especially useful in
