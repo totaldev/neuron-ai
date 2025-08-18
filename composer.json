@@ -41,6 +41,11 @@
         "typesense/typesense-php": "^5.0",
         "tomasvotruba/type-coverage": "^2.0"
     },
+    "bin": [
+        "bin/evaluation",
+        "bin/evaluation.bat",
+        "bin/evaluation.ps1"
+    ],
     "scripts": {
         "analyse": [
             "vendor/bin/phpstan analyse --memory-limit=1G -v"

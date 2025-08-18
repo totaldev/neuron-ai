@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace NeuronAI\Evaluation\Contracts;
+
+interface EvaluatorInterface
+{
+    /**
+     * Run the application logic being tested
+     * @param array<string, mixed> $datasetItem Current item from the dataset
+     * @return mixed Output from the application logic
+     */
+    public function run(array $datasetItem): mixed;
+
+    /**
+     * Evaluate the output against expected results
+     * @param mixed $output Output from run() method
+     * @param array<string, mixed> $reference Reference dataset item for comparison
+     * @return bool Whether the test passed
+     */
+    public function evaluate(mixed $output, array $reference): bool;
+}
