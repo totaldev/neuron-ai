@@ -64,7 +64,7 @@ class Gemini implements AIProviderInterface
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array<string, array<int, mixed>>
      */
     protected function generateToolsPayload(): array
     {
