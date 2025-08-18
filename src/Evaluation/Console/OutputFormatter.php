@@ -158,7 +158,7 @@ class OutputFormatter
             $uniqueAssertions = \array_unique(\array_map(fn (AssertionFailure $f): string => $f->getAssertionMethod(), $failures));
 
             echo \sprintf(
-                "%s: %d failure%s in %s\n",
+                "%s - %d failure%s in %s\n",
                 $location,
                 $failureCount,
                 $failureCount === 1 ? '' : 's',
