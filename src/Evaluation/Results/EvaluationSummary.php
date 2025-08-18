@@ -131,14 +131,14 @@ class EvaluationSummary
     }
 
     /**
-     * Get assertion failures grouped by method
+     * Get assertion failures grouped by evaluator class and line
      * @return array<string, array<AssertionFailure>>
      */
-    public function getAssertionFailuresByMethod(): array
+    public function getAssertionFailuresByLocation(): array
     {
         $groupedFailures = [];
         foreach ($this->getAllAssertionFailures() as $failure) {
-            $key = $failure->getShortEvaluatorClass() . '::' . $failure->getMethodName();
+            $key = $failure->getShortEvaluatorClass() . ':' . $failure->getLineNumber();
             if (!isset($groupedFailures[$key])) {
                 $groupedFailures[$key] = [];
             }

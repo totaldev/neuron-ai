@@ -8,9 +8,9 @@ class AssertionFailure
 {
     public function __construct(
         private readonly string $evaluatorClass,
-        private readonly string $methodName,
         private readonly string $assertionMethod,
         private readonly string $message,
+        private readonly int $lineNumber,
         private readonly array $context = []
     ) {
     }
@@ -18,11 +18,6 @@ class AssertionFailure
     public function getEvaluatorClass(): string
     {
         return $this->evaluatorClass;
-    }
-
-    public function getMethodName(): string
-    {
-        return $this->methodName;
     }
 
     public function getAssertionMethod(): string
@@ -33,6 +28,11 @@ class AssertionFailure
     public function getMessage(): string
     {
         return $this->message;
+    }
+
+    public function getLineNumber(): int
+    {
+        return $this->lineNumber;
     }
 
     /**
@@ -52,9 +52,9 @@ class AssertionFailure
     public function getFullDescription(): string
     {
         return \sprintf(
-            '%s::%s() -> %s: %s',
+            '%s:%d -> %s: %s',
             $this->getShortEvaluatorClass(),
-            $this->methodName,
+            $this->lineNumber,
             $this->assertionMethod,
             $this->message
         );

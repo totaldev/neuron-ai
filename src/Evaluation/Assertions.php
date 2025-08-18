@@ -56,15 +56,15 @@ class Assertions
 
     private function recordAssertionFailure(string $assertionMethod, string $message, array $context): void
     {
-        // Get the calling method from backtrace (skip recordAssertion and recordAssertionFailure)
+        // Get the calling line from backtrace (skip recordAssertion and recordAssertionFailure)
         $backtrace = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 3);
-        $callingMethod = $backtrace[2]['function'] ?? 'unknown';
+        $lineNumber = $backtrace[2]['line'] ?? 0;
 
         $this->assertionFailures[] = new AssertionFailure(
             static::class,
-            $callingMethod,
             $assertionMethod,
             $message !== '' && $message !== '0' ? $message : 'Assertion failed',
+            $lineNumber,
             $context
         );
     }

@@ -144,22 +144,22 @@ class OutputFormatter
 
     private function printAssertionFailureSummary(EvaluationSummary $summary): void
     {
-        $failuresByMethod = $summary->getAssertionFailuresByMethod();
+        $failuresByLocation = $summary->getAssertionFailuresByLocation();
 
-        if ($failuresByMethod === []) {
+        if ($failuresByLocation === []) {
             return;
         }
 
         echo "Assertion Failure Summary:\n";
         echo \str_repeat('-', 50) . "\n";
 
-        foreach ($failuresByMethod as $method => $failures) {
+        foreach ($failuresByLocation as $location => $failures) {
             $failureCount = \count($failures);
             $uniqueAssertions = \array_unique(\array_map(fn (AssertionFailure $f): string => $f->getAssertionMethod(), $failures));
 
             echo \sprintf(
                 "%s: %d failure%s in %s\n",
-                $method,
+                $location,
                 $failureCount,
                 $failureCount === 1 ? '' : 's',
                 \implode(', ', $uniqueAssertions)
