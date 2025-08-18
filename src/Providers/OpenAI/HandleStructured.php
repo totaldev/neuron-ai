@@ -8,35 +8,25 @@ use NeuronAI\Chat\Messages\Message;
 
 trait HandleStructured
 {
-    protected array $originalParameters = [];
-
     public function structured(
         array $messages,
         string $class,
-        array $response_format
+        array $response_format,
+        bool $strict = false,
     ): Message {
         $tk = \explode('\\', $class);
         $className = \end($tk);
 
-        // Saving original parameters entering the method for the first time
-        if ($this->originalParameters === []) {
-            $this->originalParameters = $this->parameters;
-        }
-
-        // Use array_merge for response_format to replace instead of merge
-        $structuredParams = [
+        $this->parameters = \array_merge($this->parameters, [
             'response_format' => [
                 'type' => 'json_schema',
                 'json_schema' => [
+                    'strict' => $strict,
                     "name" => $this->sanitizeClassName($className),
                     "schema" => $response_format,
                 ],
             ]
-        ];
-        
-        $this->parameters = \array_merge_recursive($this->originalParameters, $structuredParams);
-        // Ensure response_format is replaced, not merged
-        $this->parameters['response_format'] = $structuredParams['response_format'];
+        ]);
 
         return $this->chat($messages);
     }

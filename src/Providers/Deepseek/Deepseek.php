@@ -17,7 +17,8 @@ class Deepseek extends OpenAI
     public function structured(
         array $messages,
         string $class,
-        array $response_format
+        array $response_format,
+        bool $strict = false,
     ): Message {
         $this->parameters = \array_merge($this->parameters, [
             'response_format' => [
