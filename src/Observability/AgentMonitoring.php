@@ -113,9 +113,6 @@ class AgentMonitoring implements \SplObserver
         return self::$instance;
     }
 
-    /**
-     * @overloads \SplObserver::updateimprove typization
-     */
     public function update(\SplSubject $subject, ?string $event = null, mixed $data = null): void
     {
         if (!\is_null($event) && \array_key_exists($event, $this->methodsMap)) {
