@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace NeuronAI\Evaluation;
 
+use NeuronAI\Evaluation\Contracts\DatasetInterface;
 use NeuronAI\Evaluation\Contracts\EvaluatorInterface;
 
 abstract class AbstractEvaluator implements EvaluatorInterface
 {
+    /**
+     * Get the dataset for this evaluator
+     */
+    abstract public function getDataset(): DatasetInterface;
+
     /**
      * Run the application logic being tested
      * @param array<string, mixed> $datasetItem Current item from the dataset

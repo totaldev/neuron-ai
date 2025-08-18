@@ -12,8 +12,9 @@ use Throwable;
 
 class EvaluationRunner
 {
-    public function run(EvaluatorInterface $evaluator, DatasetInterface $dataset): EvaluationSummary
+    public function run(EvaluatorInterface $evaluator): EvaluationSummary
     {
+        $dataset = $evaluator->getDataset();
         $data = $dataset->load();
         $results = [];
         $totalTime = 0.0;

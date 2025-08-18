@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace NeuronAI\Evaluation\Console;
 
 use NeuronAI\Evaluation\Contracts\EvaluatorInterface;
-use NeuronAI\Evaluation\Dataset\JsonDataset;
 use NeuronAI\Evaluation\Discovery\EvaluatorDiscovery;
 use NeuronAI\Evaluation\Runner\EvaluationRunner;
 use ReflectionClass;
@@ -104,9 +103,8 @@ class EvaluationCommand
 
             try {
                 $evaluator = $this->createEvaluator($evaluatorClass);
-                $dataset = $this->discoverDataset($evaluatorClass, $path);
                 
-                $summary = $this->runner->run($evaluator, $dataset);
+                $summary = $this->runner->run($evaluator);
                 
                 // Print progress symbols
                 foreach ($summary->getResults() as $result) {
@@ -150,29 +148,6 @@ class EvaluationCommand
         }
     }
 
-    private function discoverDataset(string $evaluatorClass, string $basePath): JsonDataset
-    {
-        $className = $this->getShortClassName($evaluatorClass);
-        
-        // Try common dataset naming patterns
-        $possiblePaths = [
-            $basePath . '/datasets/' . $className . '.json',
-            $basePath . '/dataset.json',
-            dirname($basePath) . '/datasets/' . $className . '.json',
-            dirname($basePath) . '/dataset.json',
-        ];
-
-        foreach ($possiblePaths as $path) {
-            if (file_exists($path)) {
-                return new JsonDataset($path);
-            }
-        }
-
-        throw new \RuntimeException(
-            "No dataset found for {$className}. " .
-            "Expected JSON file at one of: " . implode(', ', $possiblePaths)
-        );
-    }
 
     private function getShortClassName(string $fullClassName): string
     {
@@ -190,8 +165,7 @@ class EvaluationCommand
         foreach ($evaluatorClasses as $evaluatorClass) {
             try {
                 $evaluator = $this->createEvaluator($evaluatorClass);
-                $dataset = $this->discoverDataset($evaluatorClass, $path);
-                $summary = $this->runner->run($evaluator, $dataset);
+                $summary = $this->runner->run($evaluator);
                 
                 $results = array_merge($results, $summary->getResults());
                 $totalTime += $summary->getTotalExecutionTime();

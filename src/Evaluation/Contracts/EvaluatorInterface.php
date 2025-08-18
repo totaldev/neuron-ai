@@ -7,6 +7,11 @@ namespace NeuronAI\Evaluation\Contracts;
 interface EvaluatorInterface
 {
     /**
+     * Get the dataset for this evaluator
+     */
+    public function getDataset(): DatasetInterface;
+
+    /**
      * Run the application logic being tested
      * @param array<string, mixed> $datasetItem Current item from the dataset
      * @return mixed Output from the application logic
