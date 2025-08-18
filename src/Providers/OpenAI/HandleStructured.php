@@ -23,7 +23,8 @@ trait HandleStructured
             $this->originalParameters = $this->parameters;
         }
 
-        $this->parameters = \array_merge_recursive($this->originalParameters, [
+        // Use array_merge for response_format to replace instead of merge
+        $structuredParams = [
             'response_format' => [
                 'type' => 'json_schema',
                 'json_schema' => [
@@ -31,7 +32,11 @@ trait HandleStructured
                     "schema" => $response_format,
                 ],
             ]
-        ]);
+        ];
+        
+        $this->parameters = \array_merge_recursive($this->originalParameters, $structuredParams);
+        // Ensure response_format is replaced, not merged
+        $this->parameters['response_format'] = $structuredParams['response_format'];
 
         return $this->chat($messages);
     }
