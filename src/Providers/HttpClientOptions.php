@@ -6,6 +6,9 @@ namespace NeuronAI\Providers;
 
 class HttpClientOptions
 {
+    /**
+     * @param array<string, string|int|float>|null $headers
+     */
     public function __construct(
         public readonly ?int $timeout = null,
         public readonly ?int $connectTimeout = null,
