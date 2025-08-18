@@ -7,7 +7,9 @@ namespace NeuronAI\Evaluation;
 class Assertions
 {
     private int $assertionsPassed = 0;
+
     private int $assertionsFailed = 0;
+
     /** @var array<AssertionFailure> */
     private array $assertionFailures = [];
 
