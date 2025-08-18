@@ -33,6 +33,9 @@ class Gemini implements AIProviderInterface
      */
     protected ?string $system = null;
 
+    /**
+     * @param array<string, mixed> $parameters
+     */
     public function __construct(
         protected string $key,
         protected string $model,
@@ -60,6 +63,9 @@ class Gemini implements AIProviderInterface
         return new MessageMapper();
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     protected function generateToolsPayload(): array
     {
         $tools = \array_map(function (ToolInterface $tool): array {

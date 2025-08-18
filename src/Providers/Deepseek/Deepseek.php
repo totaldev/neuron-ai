@@ -11,6 +11,9 @@ class Deepseek extends OpenAI
 {
     protected string $baseUri = "https://api.deepseek.com/v1";
 
+    /**
+     * @param array<string, mixed> $response_format
+     */
     public function structured(
         array $messages,
         string $class,

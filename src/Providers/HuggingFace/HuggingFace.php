@@ -10,6 +10,9 @@ class HuggingFace extends OpenAI
 {
     protected string $baseUri = 'https://router.huggingface.co/%s/v1';
 
+    /**
+     * @param array<string, mixed> $parameters
+     */
     public function __construct(
         protected string            $key,
         protected string            $model,

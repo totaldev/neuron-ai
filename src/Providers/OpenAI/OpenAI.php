@@ -33,6 +33,9 @@ class OpenAI implements AIProviderInterface
      */
     protected ?string $system = null;
 
+    /**
+     * @param array<string, mixed> $parameters
+     */
     public function __construct(
         protected string $key,
         protected string $model,
@@ -59,6 +62,9 @@ class OpenAI implements AIProviderInterface
         return new MessageMapper();
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     protected function generateToolsPayload(): array
     {
         return \array_map(function (ToolInterface $tool): array {

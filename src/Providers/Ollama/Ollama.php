@@ -25,6 +25,9 @@ class Ollama implements AIProviderInterface
 
     protected ?string $system = null;
 
+    /**
+     * @param array<string, mixed> $parameters
+     */
     public function __construct(
         protected string $url, // http://localhost:11434/api
         protected string $model,
