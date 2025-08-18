@@ -1,15 +1,83 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NeuronAI\Evaluation;
 
 class Assertions
 {
+    private int $assertionsPassed = 0;
+    private int $assertionsFailed = 0;
+    /** @var array<AssertionFailure> */
+    private array $assertionFailures = [];
+
+    public function getAssertionsPassed(): int
+    {
+        return $this->assertionsPassed;
+    }
+
+    public function getAssertionsFailed(): int
+    {
+        return $this->assertionsFailed;
+    }
+
+    public function getTotalAssertions(): int
+    {
+        return $this->assertionsPassed + $this->assertionsFailed;
+    }
+
+    /**
+     * @return array<AssertionFailure>
+     */
+    public function getAssertionFailures(): array
+    {
+        return $this->assertionFailures;
+    }
+
+    public function resetAssertionCounts(): void
+    {
+        $this->assertionsPassed = 0;
+        $this->assertionsFailed = 0;
+        $this->assertionFailures = [];
+    }
+
+    private function recordAssertion(bool $result, string $assertionMethod, string $message = '', array $context = []): bool
+    {
+        if ($result) {
+            $this->assertionsPassed++;
+        } else {
+            $this->assertionsFailed++;
+            $this->recordAssertionFailure($assertionMethod, $message, $context);
+        }
+        return $result;
+    }
+
+    private function recordAssertionFailure(string $assertionMethod, string $message, array $context): void
+    {
+        // Get the calling method from backtrace (skip recordAssertion and recordAssertionFailure)
+        $backtrace = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+        $callingMethod = $backtrace[2]['function'] ?? 'unknown';
+
+        $this->assertionFailures[] = new AssertionFailure(
+            static::class,
+            $callingMethod,
+            $assertionMethod,
+            $message !== '' && $message !== '0' ? $message : 'Assertion failed',
+            $context
+        );
+    }
     /**
      * Assert that a string contains a substring
      */
     protected function assertContains(string $needle, string $haystack): bool
     {
-        return str_contains($haystack, $needle);
+        $result = \str_contains($haystack, $needle);
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected '$haystack' to contain '$needle'",
+            ['needle' => $needle, 'haystack' => $haystack]
+        );
     }
 
     /**
@@ -18,12 +86,19 @@ class Assertions
      */
     protected function assertContainsAny(array $keywords, string $haystack): bool
     {
+        $result = false;
         foreach ($keywords as $keyword) {
-            if (str_contains(strtolower($haystack), strtolower($keyword))) {
-                return true;
+            if (\str_contains(\strtolower($haystack), \strtolower($keyword))) {
+                $result = true;
+                break;
             }
         }
-        return false;
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected '$haystack' to contain any of: " . \implode(', ', $keywords),
+            ['keywords' => $keywords, 'haystack' => $haystack]
+        );
     }
 
     /**
@@ -32,12 +107,20 @@ class Assertions
      */
     protected function assertContainsAll(array $keywords, string $haystack): bool
     {
+        $result = true;
+        $missing = [];
         foreach ($keywords as $keyword) {
-            if (!str_contains(strtolower($haystack), strtolower($keyword))) {
-                return false;
+            if (!\str_contains(\strtolower($haystack), \strtolower($keyword))) {
+                $result = false;
+                $missing[] = $keyword;
             }
         }
-        return true;
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected '$haystack' to contain all keywords. Missing: " . \implode(', ', $missing),
+            ['keywords' => $keywords, 'haystack' => $haystack, 'missing' => $missing]
+        );
     }
 
     /**
@@ -45,8 +128,14 @@ class Assertions
      */
     protected function assertLengthBetween(string $string, int $min, int $max): bool
     {
-        $length = strlen($string);
-        return $length >= $min && $length <= $max;
+        $length = \strlen($string);
+        $result = $length >= $min && $length <= $max;
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected string length to be between $min and $max, got $length",
+            ['string' => $string, 'min' => $min, 'max' => $max, 'actual_length' => $length]
+        );
     }
 
     /**
@@ -54,7 +143,13 @@ class Assertions
      */
     protected function assertResponseStartsWith(string $expected, string $actual): bool
     {
-        return str_starts_with($actual, $expected);
+        $result = \str_starts_with($actual, $expected);
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected response to start with '$expected'",
+            ['expected' => $expected, 'actual' => $actual]
+        );
     }
 
     /**
@@ -62,7 +157,13 @@ class Assertions
      */
     protected function assertResponseEndsWith(string $expected, string $actual): bool
     {
-        return str_ends_with($actual, $expected);
+        $result = \str_ends_with($actual, $expected);
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected response to end with '$expected'",
+            ['expected' => $expected, 'actual' => $actual]
+        );
     }
 
     /**
@@ -70,7 +171,13 @@ class Assertions
      */
     protected function assertEqualsIgnoreCase(string $expected, string $actual): bool
     {
-        return strtolower(trim($expected)) === strtolower(trim($actual));
+        $result = \strtolower(\trim($expected)) === \strtolower(\trim($actual));
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected '$actual' to equal '$expected' (case insensitive)",
+            ['expected' => $expected, 'actual' => $actual]
+        );
     }
 
     /**
@@ -78,7 +185,13 @@ class Assertions
      */
     protected function assertMatchesRegex(string $pattern, string $subject): bool
     {
-        return preg_match($pattern, $subject) === 1;
+        $result = \preg_match($pattern, $subject) === 1;
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : "Expected '$subject' to match pattern '$pattern'",
+            ['pattern' => $pattern, 'subject' => $subject]
+        );
     }
 
     /**
@@ -86,7 +199,13 @@ class Assertions
      */
     protected function assertNotEmpty(string $response): bool
     {
-        return !empty(trim($response));
+        $result = !in_array(\trim($response), ['', '0'], true);
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : 'Expected response to not be empty',
+            ['response' => $response]
+        );
     }
 
     /**
@@ -94,7 +213,13 @@ class Assertions
      */
     protected function assertIsJson(string $response): bool
     {
-        json_decode($response);
-        return json_last_error() === JSON_ERROR_NONE;
+        \json_decode($response);
+        $result = \json_last_error() === \JSON_ERROR_NONE;
+        return $this->recordAssertion(
+            $result,
+            __FUNCTION__,
+            $result ? '' : 'Expected valid JSON response: ' . \json_last_error_msg(),
+            ['response' => $response, 'json_error' => \json_last_error_msg()]
+        );
     }
 }

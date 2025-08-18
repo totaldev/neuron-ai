@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace NeuronAI\Evaluation\Results;
 
+use NeuronAI\Evaluation\AssertionFailure;
+
 class EvaluationResult
 {
     /**
      * @param array<string, mixed> $input
+     * @param array<AssertionFailure> $assertionFailures
      */
     public function __construct(
         private readonly int $index,
@@ -15,6 +18,9 @@ class EvaluationResult
         private readonly array $input,
         private readonly mixed $output,
         private readonly float $executionTime,
+        private readonly int $assertionsPassed,
+        private readonly int $assertionsFailed,
+        private readonly array $assertionFailures = [],
         private readonly ?string $error = null
     ) {
     }
@@ -55,5 +61,33 @@ class EvaluationResult
     public function hasError(): bool
     {
         return $this->error !== null;
+    }
+
+    public function getAssertionsPassed(): int
+    {
+        return $this->assertionsPassed;
+    }
+
+    public function getAssertionsFailed(): int
+    {
+        return $this->assertionsFailed;
+    }
+
+    public function getTotalAssertions(): int
+    {
+        return $this->assertionsPassed + $this->assertionsFailed;
+    }
+
+    /**
+     * @return array<AssertionFailure>
+     */
+    public function getAssertionFailures(): array
+    {
+        return $this->assertionFailures;
+    }
+
+    public function hasAssertionFailures(): bool
+    {
+        return $this->assertionFailures !== [];
     }
 }

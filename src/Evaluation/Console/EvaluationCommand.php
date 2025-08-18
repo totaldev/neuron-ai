@@ -14,8 +14,8 @@ use Throwable;
 class EvaluationCommand
 {
     private OutputFormatter $formatter;
-    private EvaluatorDiscovery $discovery;
-    private EvaluationRunner $runner;
+    private readonly EvaluatorDiscovery $discovery;
+    private readonly EvaluationRunner $runner;
 
     public function __construct()
     {
@@ -63,14 +63,14 @@ class EvaluationCommand
         ];
 
         // Skip script name
-        array_shift($args);
+        \array_shift($args);
 
         foreach ($args as $arg) {
             if ($arg === '--help' || $arg === '-h') {
                 $options['help'] = true;
             } elseif ($arg === '--verbose' || $arg === '-v') {
                 $options['verbose'] = true;
-            } elseif (!str_starts_with($arg, '-') && empty($options['path'])) {
+            } elseif (!\str_starts_with($arg, '-') && empty($options['path'])) {
                 $options['path'] = $arg;
             }
         }
@@ -85,14 +85,14 @@ class EvaluationCommand
         // Discover evaluators
         $evaluatorClasses = $this->discovery->discover($path);
 
-        if (empty($evaluatorClasses)) {
+        if ($evaluatorClasses === []) {
             $this->formatter->printError("No evaluator classes found in: {$path}");
             return 1;
         }
 
         $totalFailures = 0;
         $evaluatorCount = 1;
-        $totalEvaluators = count($evaluatorClasses);
+        $totalEvaluators = \count($evaluatorClasses);
 
         foreach ($evaluatorClasses as $evaluatorClass) {
             $this->formatter->printProgress(
@@ -103,9 +103,9 @@ class EvaluationCommand
 
             try {
                 $evaluator = $this->createEvaluator($evaluatorClass);
-                
+
                 $summary = $this->runner->run($evaluator);
-                
+
                 // Print progress symbols
                 foreach ($summary->getResults() as $result) {
                     $this->formatter->printProgressSymbol($result->isPassed());
@@ -123,7 +123,7 @@ class EvaluationCommand
             $evaluatorCount++;
         }
 
-        $this->formatter->printSummary($this->createOverallSummary($evaluatorClasses, $path));
+        $this->formatter->printSummary($this->createOverallSummary($evaluatorClasses));
 
         return $totalFailures > 0 ? 1 : 0;
     }
@@ -144,30 +144,30 @@ class EvaluationCommand
             );
 
         } catch (ReflectionException $e) {
-            throw new \RuntimeException("Cannot instantiate evaluator {$className}: " . $e->getMessage());
+            throw new \RuntimeException("Cannot instantiate evaluator {$className}: " . $e->getMessage(), $e->getCode(), $e);
         }
     }
 
 
     private function getShortClassName(string $fullClassName): string
     {
-        $parts = explode('\\', $fullClassName);
-        return end($parts);
+        $parts = \explode('\\', $fullClassName);
+        return \end($parts);
     }
 
-    private function createOverallSummary(array $evaluatorClasses, string $path): \NeuronAI\Evaluation\Results\EvaluationSummary
+    private function createOverallSummary(array $evaluatorClasses): \NeuronAI\Evaluation\Results\EvaluationSummary
     {
         // This is a simplified overall summary - in a real implementation,
         // you'd want to collect all individual results
         $results = [];
         $totalTime = 0.0;
-        
+
         foreach ($evaluatorClasses as $evaluatorClass) {
             try {
                 $evaluator = $this->createEvaluator($evaluatorClass);
                 $summary = $this->runner->run($evaluator);
-                
-                $results = array_merge($results, $summary->getResults());
+
+                $results = \array_merge($results, $summary->getResults());
                 $totalTime += $summary->getTotalExecutionTime();
             } catch (Throwable) {
                 // Skip failed evaluators for overall summary

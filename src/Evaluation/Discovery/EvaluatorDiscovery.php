@@ -18,7 +18,7 @@ class EvaluatorDiscovery
      */
     public function discover(string $path): array
     {
-        if (!is_dir($path)) {
+        if (!\is_dir($path)) {
             throw new \InvalidArgumentException("Directory not found: {$path}");
         }
 
@@ -27,7 +27,7 @@ class EvaluatorDiscovery
 
         foreach ($files as $file) {
             $classes = $this->getClassesFromFile($file);
-            
+
             foreach ($classes as $class) {
                 if ($this->isEvaluatorClass($class)) {
                     $evaluators[] = $class;
@@ -62,23 +62,23 @@ class EvaluatorDiscovery
      */
     private function getClassesFromFile(string $filePath): array
     {
-        $content = file_get_contents($filePath);
+        $content = \file_get_contents($filePath);
         if ($content === false) {
             return [];
         }
 
         $classes = [];
         $namespace = '';
-        
+
         // Extract namespace
-        if (preg_match('/^namespace\s+([^;]+);/m', $content, $matches)) {
+        if (\preg_match('/^namespace\s+([^;]+);/m', $content, $matches)) {
             $namespace = $matches[1];
         }
 
         // Extract class names
-        if (preg_match_all('/^class\s+(\w+)/m', $content, $matches)) {
+        if (\preg_match_all('/^class\s+(\w+)/m', $content, $matches)) {
             foreach ($matches[1] as $className) {
-                $fullClassName = $namespace ? "{$namespace}\\{$className}" : $className;
+                $fullClassName = $namespace !== '' && $namespace !== '0' ? "{$namespace}\\{$className}" : $className;
                 $classes[] = $fullClassName;
             }
         }
@@ -90,12 +90,12 @@ class EvaluatorDiscovery
     {
         try {
             // Check if class exists (autoload it)
-            if (!class_exists($className)) {
+            if (!\class_exists($className)) {
                 return false;
             }
 
             $reflection = new ReflectionClass($className);
-            
+
             // Must implement EvaluatorInterface
             if (!$reflection->implementsInterface(EvaluatorInterface::class)) {
                 return false;
@@ -105,13 +105,8 @@ class EvaluatorDiscovery
             if ($reflection->isAbstract() || $reflection->isInterface()) {
                 return false;
             }
-
             // Must be instantiable
-            if (!$reflection->isInstantiable()) {
-                return false;
-            }
-
-            return true;
+            return $reflection->isInstantiable();
         } catch (ReflectionException) {
             return false;
         }
