@@ -7,7 +7,7 @@ namespace NeuronAI\Evaluation;
 use NeuronAI\Evaluation\Contracts\DatasetInterface;
 use NeuronAI\Evaluation\Contracts\EvaluatorInterface;
 
-abstract class AbstractEvaluator extends Assertions implements EvaluatorInterface
+abstract class BaseEvaluator extends Assertions implements EvaluatorInterface
 {
     /**
      * Get the dataset for this evaluator
