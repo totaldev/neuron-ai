@@ -7,6 +7,7 @@ namespace NeuronAI\Providers\Ollama;
 use GuzzleHttp\Client;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
@@ -46,6 +47,9 @@ class Ollama implements AIProviderInterface
         return new MessageMapper();
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     protected function generateToolsPayload(): array
     {
         return \array_map(function (ToolInterface $tool): array {
@@ -83,6 +87,10 @@ class Ollama implements AIProviderInterface
         }, $this->tools);
     }
 
+    /**
+     * @param array<string, mixed> $message
+     * @throws ProviderException
+     */
     protected function createToolCallMessage(array $message): Message
     {
         $tools = \array_map(fn (array $item): ToolInterface => $this->findTool($item['function']['name'])

@@ -21,6 +21,7 @@ use NeuronAI\Observability\Events\SchemaGeneration;
 use NeuronAI\Observability\Events\Validated;
 use NeuronAI\Observability\Events\Validating;
 use NeuronAI\StructuredOutput\Deserializer\Deserializer;
+use NeuronAI\StructuredOutput\Deserializer\DeserializerException;
 use NeuronAI\StructuredOutput\JsonExtractor;
 use NeuronAI\StructuredOutput\JsonSchema;
 use NeuronAI\StructuredOutput\Validation\Validator;
@@ -103,6 +104,12 @@ trait HandleStructured
         throw $exception;
     }
 
+    /**
+     * @param array<string, mixed> $schema
+     * @throws AgentException
+     * @throws DeserializerException
+     * @throws \ReflectionException
+     */
     protected function processResponse(
         Message $response,
         array $schema,

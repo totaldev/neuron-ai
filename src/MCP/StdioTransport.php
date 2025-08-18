@@ -6,12 +6,20 @@ namespace NeuronAI\MCP;
 
 class StdioTransport implements McpTransportInterface
 {
-    /** @var null|resource|false $process */
+    /**
+     * @var null|resource|false $process
+     */
     private mixed $process = null;
+
+    /**
+     * @var null|array<int, resource|false> $pipes
+     */
     private ?array $pipes = null;
 
     /**
      * Create a new StdioTransport with the given configuration
+     *
+     * @param array<string, mixed> $config
      */
     public function __construct(protected array $config)
     {
@@ -68,6 +76,9 @@ class StdioTransport implements McpTransportInterface
 
     /**
      * Send a request to the MCP server
+     *
+     * @param array<string, mixed> $data
+     * @throws McpException
      */
     public function send(array $data): void
     {
@@ -95,6 +106,9 @@ class StdioTransport implements McpTransportInterface
 
     /**
      * Receive a response from the MCP server
+     *
+     * @return array<string, mixed>
+     * @throws McpException
      */
     public function receive(): array
     {

@@ -60,13 +60,13 @@ class TokenCounterTest extends TestCase
 
     public function test_counts_tokens_for_array_content(): void
     {
-        $content = ['text' => 'Hello', 'type' => 'message'];
+        $content = [['text' => 'Hello', 'type' => 'message']];
         $message = new UserMessage($content);
 
-        // Content: JSON encoded array = strlen('{"text":"Hello","type":"message"}') = 33 chars
+        // Content: JSON encoded array [{"text":"Hello","type":"message"}] = 35 chars
         // Role: "user" = 4 chars
-        // Total chars: 37
-        // Tokens from chars: ceil(37 / 4.0) = 10
+        // Total chars: 39
+        // Tokens from chars: ceil(39 / 4.0) = 10
         // Extra tokens per message: 3
         // Total: 10 + 3 = 13
         $result = $this->tokenCounter->count([$message]);
@@ -110,21 +110,21 @@ class TokenCounterTest extends TestCase
     public function test_counts_tokens_for_tool_call_message_with_array_content(): void
     {
         $tool = $this->createMockTool('test_tool', ['param' => 'value']);
-        $content = ['text' => 'Using tool', 'type' => 'tool_usage'];
+        $content = [['text' => 'Using tool', 'type' => 'tool_usage']];
         $message = new ToolCallMessage($content, [$tool]);
         $messages = [$message];
 
         $result = $this->tokenCounter->count($messages);
 
-        // Content: {"text":"Using tool","type":"tool_usage"} = 41 chars
+        // Content: [{"text":"Using tool","type":"tool_usage"}] = 43 chars
         // Role: "assistant" = 9 chars
         // Inputs: {'param':'value'} = 17 chars
         // Call Id: call_123 = 8 chars
-        // Total chars: 75
-        // Tokens from chars: ceil(75 / 4.0) = 19
+        // Total chars: 77
+        // Tokens from chars: ceil(77 / 4.0) = 20
         // Extra tokens per message: 3
-        // Total: 19 + 3 = 22
-        $this->assertSame(22, $result);
+        // Total: 20 + 3 = 23
+        $this->assertSame(23, $result);
     }
 
     public function test_counts_tokens_with_custom_chars_per_token_ratio(): void

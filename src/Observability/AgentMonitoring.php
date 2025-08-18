@@ -113,6 +113,9 @@ class AgentMonitoring implements \SplObserver
         return self::$instance;
     }
 
+    /**
+     * @overloads \SplObserver::updateimprove typization
+     */
     public function update(\SplSubject $subject, ?string $event = null, mixed $data = null): void
     {
         if (!\is_null($event) && \array_key_exists($event, $this->methodsMap)) {
@@ -193,6 +196,9 @@ class AgentMonitoring implements \SplObserver
         return \explode('-', $event)[0];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     protected function getContext(Agent $agent): array
     {
         $mapTool = fn (ToolInterface $tool) => [
