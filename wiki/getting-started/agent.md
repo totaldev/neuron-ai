@@ -98,7 +98,7 @@ class YouTubeAgent extends Agent
     
     public function instructions(): string
     {
-        return new SystemPrompt(
+        return (string) new SystemPrompt(
             background: ["You are an AI Agent specialized in writing YouTube video summaries."],
             steps: [
                 "Get the url of a YouTube video, or ask the user to provide one.",
