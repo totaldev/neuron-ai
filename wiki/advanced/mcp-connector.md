@@ -33,7 +33,7 @@ class MyAgent extends Agent
     
     public function instructions(): string
     {
-        return new SystemPrompt(["<SYSTEM PROMPT>"]);
+        return (string) new SystemPrompt(["<SYSTEM PROMPT>"]);
     }
     
     protected function tools()

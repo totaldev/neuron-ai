@@ -187,7 +187,7 @@ class WorkoutTipsAgent extends RAG
     
     public function instructions(): string
     {
-        return new SystemPrompt(
+        return (string) new SystemPrompt(
             background: ["You are an AI Agent specialized in providing workout tips."],
         );
     }

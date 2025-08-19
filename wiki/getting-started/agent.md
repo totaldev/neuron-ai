@@ -177,7 +177,7 @@ $agent = Agent::make()
         )
     )
     ->withInstructions(
-        new SystemPrompt(...)
+        (string) new SystemPrompt(...)
     )
     ->addTool([...]);
     
