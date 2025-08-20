@@ -167,7 +167,7 @@ Supported providers:
 
 ## Tools & Toolkits
 
-You can add abilities to your agent to perform concrete tasks:
+Make your agent able to perform concrete tasks, like reading from a database, by adding tools or toolkits (collections of tools).
 
 ```php
 <?php
