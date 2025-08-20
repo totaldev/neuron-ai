@@ -10,7 +10,7 @@ use NeuronAI\Tools\ToolProperty;
 
 class SupadataVideoMetadataTool extends Tool
 {
-    use HasSupadataClient;
+    use HttpClient;
 
     public function __construct(protected string $key)
     {
