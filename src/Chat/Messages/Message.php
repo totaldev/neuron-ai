@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace NeuronAI\Chat\Messages;
 
+use JsonSerializable;
 use NeuronAI\Chat\Attachments\Attachment;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\StaticConstructor;
+use function array_map;
+use function array_merge;
 
 /**
  * @method static static make(MessageRole $role, array<int, mixed>|string|int|float|null $content = null)
  */
-class Message implements \JsonSerializable
+class Message implements JsonSerializable
 {
     use StaticConstructor;
 
@@ -90,7 +93,7 @@ class Message implements \JsonSerializable
     /**
      * @param string|array<int, mixed>|null $value
      */
-    public function addMetadata(string $key, string|array|null $value): Message
+    public function addMetadata(string $key, string|array|null|bool $value): Message
     {
         $this->meta[$key] = $value;
         return $this;
@@ -106,14 +109,14 @@ class Message implements \JsonSerializable
             'content' => $this->getContent()
         ];
 
-        if ($this->getUsage() instanceof \NeuronAI\Chat\Messages\Usage) {
+        if ($this->getUsage() instanceof Usage) {
             $data['usage'] = $this->getUsage()->jsonSerialize();
         }
 
         if ($this->getAttachments() !== []) {
-            $data['attachments'] = \array_map(fn (Attachment $attachment): array => $attachment->jsonSerialize(), $this->getAttachments());
+            $data['attachments'] = array_map(fn (Attachment $attachment): array => $attachment->jsonSerialize(), $this->getAttachments());
         }
 
-        return \array_merge($this->meta, $data);
+        return array_merge($this->meta, $data);
     }
 }
