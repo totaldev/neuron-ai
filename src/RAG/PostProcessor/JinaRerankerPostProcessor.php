@@ -9,6 +9,9 @@ use GuzzleHttp\RequestOptions;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\RAG\Document;
 
+use function array_map;
+use function json_decode;
+
 class JinaRerankerPostProcessor implements PostProcessorInterface
 {
     protected Client $client;
@@ -37,16 +40,16 @@ class JinaRerankerPostProcessor implements PostProcessorInterface
         $response = $this->getClient()->post('rerank', [
             RequestOptions::JSON => [
                 'model' => $this->model,
-                'query' => $question->getContent(),
+                'query' => $question->getContentBlocks(),
                 'top_n' => $this->topN,
-                'documents' => \array_map(fn (Document $document): array => ['text' => $document->getContent()], $documents),
+                'documents' => array_map(fn (Document $document): array => ['text' => $document->getContent()], $documents),
                 'return_documents' => false,
             ],
         ])->getBody()->getContents();
 
-        $result = \json_decode($response, true);
+        $result = json_decode($response, true);
 
-        return \array_map(function (array $item) use ($documents): Document {
+        return array_map(function (array $item) use ($documents): Document {
             $document = $documents[$item['index']];
             $document->setScore($item['relevance_score']);
             return $document;

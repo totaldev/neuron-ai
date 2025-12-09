@@ -4,29 +4,33 @@ declare(strict_types=1);
 
 namespace NeuronAI\RAG;
 
-use NeuronAI\Agent;
-use NeuronAI\AgentInterface;
-use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Agent\Agent;
 use NeuronAI\Exceptions\AgentException;
-use NeuronAI\Observability\Events\PostProcessed;
-use NeuronAI\Observability\Events\PostProcessing;
-use NeuronAI\Observability\Events\PreProcessed;
-use NeuronAI\Observability\Events\PreProcessing;
-use NeuronAI\Observability\Events\Retrieved;
-use NeuronAI\Observability\Events\Retrieving;
-use NeuronAI\Exceptions\MissingCallbackParameter;
-use NeuronAI\Exceptions\ToolCallableNotSet;
 use NeuronAI\Providers\AIProviderInterface;
+use NeuronAI\RAG\Nodes\EnrichInstructionsNode;
+use NeuronAI\RAG\Nodes\PostProcessDocumentsNode;
+use NeuronAI\RAG\Nodes\PreProcessQueryNode;
+use NeuronAI\RAG\Nodes\RetrieveDocumentsNode;
 use NeuronAI\RAG\PostProcessor\PostProcessorInterface;
 use NeuronAI\RAG\PreProcessor\PreProcessorInterface;
+use NeuronAI\Workflow\Events\Event;
+use NeuronAI\Workflow\Events\StartEvent;
+use NeuronAI\Workflow\Node;
+
+use function array_chunk;
+use function array_keys;
+use function array_merge;
+use function explode;
+use function is_array;
 
 /**
- * @method RAG withProvider(AIProviderInterface $provider)
+ * @method static static make(?AIProviderInterface $aiProvider = null, ?string $workflowId = null)
  */
 class RAG extends Agent
 {
     use ResolveVectorStore;
     use ResolveEmbeddingProvider;
+    use ResolveRetrieval;
 
     /**
      * @var PreProcessorInterface[]
@@ -38,161 +42,26 @@ class RAG extends Agent
      */
     protected array $postProcessors = [];
 
-    /**
-     * @deprecated TUse "chat" instead
-     */
-    public function answer(Message $question): Message
+    protected function startEvent(): Event
     {
-        return $this->chat($question);
+        return new StartEvent();
     }
 
     /**
-     * @deprecated Use "stream" instead
+     * @param Node|Node[] $nodes Mode-specific nodes (ChatNode, StreamingNode, etc.)
      */
-    public function answerStream(Message $question): \Generator
+    protected function compose(array|Node $nodes): void
     {
-        return $this->stream($question);
-    }
+        $nodes = is_array($nodes) ? $nodes : [$nodes];
 
-    /**
-     * @throws MissingCallbackParameter
-     * @throws ToolCallableNotSet
-     * @throws \Throwable
-     */
-    public function chat(Message|array $messages): Message
-    {
-        $question = \is_array($messages) ? \end($messages) : $messages;
+        $nodes = array_merge($nodes, [
+            new PreProcessQueryNode($this->preProcessors()),
+            new RetrieveDocumentsNode($this->resolveRetrieval()),
+            new PostProcessDocumentsNode($this->postProcessors()),
+            new EnrichInstructionsNode($this->resolveInstructions(), $this->bootstrapTools()),
+        ]);
 
-        $this->notify('chat-rag-start');
-
-        $this->retrieval($question);
-
-        $response = parent::chat($messages);
-
-        $this->notify('chat-rag-stop');
-        return $response;
-    }
-
-    public function stream(Message|array $messages): \Generator
-    {
-        $question = \is_array($messages) ? \end($messages) : $messages;
-
-        $this->notify('stream-rag-start');
-
-        $this->retrieval($question);
-
-        yield from parent::stream($messages);
-
-        $this->notify('stream-rag-stop');
-    }
-
-    public function structured(Message|array $messages, ?string $class = null, int $maxRetries = 1): mixed
-    {
-        $question = \is_array($messages) ? \end($messages) : $messages;
-
-        $this->notify('structured-rag-start');
-
-        $this->retrieval($question);
-
-        $structured = parent::structured($messages, $class, $maxRetries);
-
-        $this->notify('structured-rag-stop');
-
-        return $structured;
-    }
-
-    protected function retrieval(Message $question): void
-    {
-        $this->withDocumentsContext(
-            $this->retrieveDocuments($question)
-        );
-    }
-
-    /**
-     * Set the system message based on the context.
-     *
-     * @param Document[] $documents
-     */
-    public function withDocumentsContext(array $documents): AgentInterface
-    {
-        $originalInstructions = $this->resolveInstructions();
-
-        // Remove the old context to avoid infinite grow
-        $newInstructions = $this->removeDelimitedContent($originalInstructions, '<EXTRA-CONTEXT>', '</EXTRA-CONTEXT>');
-
-        $newInstructions .= '<EXTRA-CONTEXT>';
-        foreach ($documents as $document) {
-            $newInstructions .= "Source Type: ".$document->getSourceType().\PHP_EOL.
-                "Source Name: ".$document->getSourceName().\PHP_EOL.
-                "Content: ".$document->getContent().\PHP_EOL.\PHP_EOL;
-        }
-        $newInstructions .= '</EXTRA-CONTEXT>';
-
-        $this->withInstructions(\trim($newInstructions));
-
-        return $this;
-    }
-
-    /**
-     * Retrieve relevant documents from the vector store.
-     *
-     * @return Document[]
-     */
-    public function retrieveDocuments(Message $question): array
-    {
-        $question = $this->applyPreProcessors($question);
-
-        $this->notify('rag-retrieving', new Retrieving($question));
-
-        $documents = $this->resolveVectorStore()->similaritySearch(
-            $this->resolveEmbeddingsProvider()->embedText($question->getContent()),
-        );
-
-        $retrievedDocs = [];
-
-        foreach ($documents as $document) {
-            //md5 for removing duplicates
-            $retrievedDocs[\md5($document->getContent())] = $document;
-        }
-
-        $retrievedDocs = \array_values($retrievedDocs);
-
-        $this->notify('rag-retrieved', new Retrieved($question, $retrievedDocs));
-
-        return $this->applyPostProcessors($question, $retrievedDocs);
-    }
-
-    /**
-     * Apply a series of preprocessors to the asked question.
-     *
-     * @return Message The processed question.
-     */
-    protected function applyPreProcessors(Message $question): Message
-    {
-        foreach ($this->preProcessors() as $processor) {
-            $this->notify('rag-preprocessing', new PreProcessing($processor::class, $question));
-            $question = $processor->process($question);
-            $this->notify('rag-preprocessed', new PreProcessed($processor::class, $question));
-        }
-
-        return $question;
-    }
-
-    /**
-     * Apply a series of postprocessors to the retrieved documents.
-     *
-     * @param Document[] $documents The documents to process.
-     * @return Document[] The processed documents.
-     */
-    protected function applyPostProcessors(Message $question, array $documents): array
-    {
-        foreach ($this->postProcessors() as $processor) {
-            $this->notify('rag-postprocessing', new PostProcessing($processor::class, $question, $documents));
-            $documents = $processor->process($question, $documents);
-            $this->notify('rag-postprocessed', new PostProcessed($processor::class, $question, $documents));
-        }
-
-        return $documents;
+        parent::compose($nodes);
     }
 
     /**
@@ -202,7 +71,7 @@ class RAG extends Agent
      */
     public function addDocuments(array $documents, int $chunkSize = 50): void
     {
-        foreach (\array_chunk($documents, $chunkSize) as $chunk) {
+        foreach (array_chunk($documents, $chunkSize) as $chunk) {
             $this->resolveVectorStore()->addDocuments(
                 $this->resolveEmbeddingsProvider()->embedDocuments($chunk)
             );
@@ -210,6 +79,8 @@ class RAG extends Agent
     }
 
     /**
+     * Reindex documents by source (delete old, add new).
+     *
      * @param Document[] $documents
      */
     public function reindexBySource(array $documents, int $chunkSize = 50): void
@@ -226,14 +97,17 @@ class RAG extends Agent
             $grouped[$key][] = $document;
         }
 
-        foreach (\array_keys($grouped) as $key) {
-            [$sourceType, $sourceName] = \explode(':', $key);
+        foreach (array_keys($grouped) as $key) {
+            [$sourceType, $sourceName] = explode(':', $key);
             $this->resolveVectorStore()->deleteBySource($sourceType, $sourceName);
             $this->addDocuments($grouped[$key], $chunkSize);
         }
     }
 
     /**
+     * Set preprocessors for query transformation.
+     *
+     * @param PreProcessorInterface[] $preProcessors
      * @throws AgentException
      */
     public function setPreProcessors(array $preProcessors): RAG
@@ -250,6 +124,9 @@ class RAG extends Agent
     }
 
     /**
+     * Set post-processors for document transformation.
+     *
+     * @param PostProcessorInterface[] $postProcessors
      * @throws AgentException
      */
     public function setPostProcessors(array $postProcessors): RAG
@@ -266,6 +143,8 @@ class RAG extends Agent
     }
 
     /**
+     * Get configured preprocessors.
+     *
      * @return PreProcessorInterface[]
      */
     protected function preProcessors(): array
@@ -274,6 +153,8 @@ class RAG extends Agent
     }
 
     /**
+     * Get configured post-processors.
+     *
      * @return PostProcessorInterface[]
      */
     protected function postProcessors(): array

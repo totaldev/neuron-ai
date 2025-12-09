@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronAI\Tests;
 
+use NeuronAI\StructuredOutput\Deserializer\Deserializer;
 use NeuronAI\StructuredOutput\StructuredOutputException;
 use NeuronAI\StructuredOutput\Validation\Rules\ArrayOf;
 use NeuronAI\StructuredOutput\Validation\Rules\Enum;
@@ -24,12 +25,18 @@ use NeuronAI\StructuredOutput\Validation\Rules\NotBlank;
 use NeuronAI\StructuredOutput\Validation\Rules\NotEqualTo;
 use NeuronAI\StructuredOutput\Validation\Rules\IsNotNull;
 use NeuronAI\StructuredOutput\Validation\Rules\Url;
+use NeuronAI\StructuredOutput\Validation\Rules\WordsCount;
 use NeuronAI\StructuredOutput\Validation\Validator;
 use NeuronAI\Tests\Stubs\DummyEnum;
 use NeuronAI\Tests\Stubs\IntEnum;
-use NeuronAI\Tests\Stubs\Person;
+use NeuronAI\Tests\Stubs\StructuredOutput\Address;
+use NeuronAI\Tests\Stubs\StructuredOutput\Person;
 use NeuronAI\Tests\Stubs\StringEnum;
+use NeuronAI\Tests\Stubs\StructuredOutput\Tag;
+use NeuronAI\Tests\Stubs\StructuredOutput\TagProperties;
 use PHPUnit\Framework\TestCase;
+
+use function range;
 
 class ValidationTest extends TestCase
 {
@@ -137,6 +144,30 @@ class ValidationTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function test_nested_array_of(): void
+    {
+        $class = new Person();
+        $tag = new Tag();
+        $tag->name = 'test';
+        $tagProp = new TagProperties();
+        $tagProp->value = 'test';
+        $tag->properties = [$tagProp];
+        $class->firstName = 'test';
+        $class->tags = [$tag];
+
+        $violations = Validator::validate($class);
+        $this->assertCount(0, $violations);
+    }
+
+    public function test_nested_array_with_deserialize(): void
+    {
+        $json = '{"firstName": "John", "lastName": "Doe", "tags": [{"name": "agent", "properties": [{"value": "prop"}]}]}';
+
+        $class = Deserializer::make()->fromJson($json, Person::class);
+        $violations = Validator::validate($class);
+        $this->assertCount(0, $violations);
+    }
+
     public function test_array_of_nested_validation(): void
     {
         $class = new class () {
@@ -152,6 +183,27 @@ class ValidationTest extends TestCase
         $person = new Person();
         $person->firstName = 'test';
         $class->people = [$person];
+        $violations = Validator::validate($class);
+        $this->assertCount(0, $violations);
+    }
+
+    public function test_array_of_multiple_types(): void
+    {
+        $class = new class () {
+            #[ArrayOf(type: [Person::class, Address::class])]
+            public array $people;
+        };
+        $class = new $class();
+
+        $person = new Person();
+        $person->firstName = 'test';
+
+        $address = new Address();
+        $address->street = 'test';
+        $address->zip = '80100';
+
+        $class->people = [$person, $address];
+
         $violations = Validator::validate($class);
         $this->assertCount(0, $violations);
     }
@@ -222,11 +274,11 @@ class ValidationTest extends TestCase
         $this->assertCount(1, $violations);
 
 
-        $class->tags = \range(1, 10);
+        $class->tags = range(1, 10);
         $violations = Validator::validate($class);
         $this->assertCount(0, $violations);
 
-        $class->tags = \range(1, 11);
+        $class->tags = range(1, 11);
         $violations = Validator::validate($class);
         $this->assertCount(1, $violations);
 
@@ -556,5 +608,51 @@ class ValidationTest extends TestCase
         $this->expectException(StructuredOutputException::class);
 
         Validator::validate($obj);
+    }
+
+    public function test_words_count_validation(): void
+    {
+        $class = new class () {
+            #[WordsCount(exactly: 3)]
+            public string $text = 'hello world test';
+        };
+        $class = new $class();
+
+        $violations = Validator::validate($class);
+        $this->assertCount(0, $violations);
+
+        $class->text = 'hello world';
+        $violations = Validator::validate($class);
+        $this->assertCount(1, $violations);
+
+        $class->text = 'hello world test extra';
+        $violations = Validator::validate($class);
+        $this->assertCount(1, $violations);
+
+        $class = new class () {
+            #[WordsCount(min: 2)]
+            public string $text = 'hello world';
+        };
+        $class = new $class();
+
+        $violations = Validator::validate($class);
+        $this->assertCount(0, $violations);
+
+        $class->text = 'hello';
+        $violations = Validator::validate($class);
+        $this->assertCount(1, $violations);
+
+        $class = new class () {
+            #[WordsCount(max: 2)]
+            public string $text = 'hello world';
+        };
+        $class = new $class();
+
+        $violations = Validator::validate($class);
+        $this->assertCount(0, $violations);
+
+        $class->text = 'hello world test';
+        $violations = Validator::validate($class);
+        $this->assertCount(1, $violations);
     }
 }

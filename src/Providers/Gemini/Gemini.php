@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace NeuronAI\Providers\Gemini;
 
 use GuzzleHttp\Client;
-use NeuronAI\Chat\Enums\MessageRole;
-use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Chat\Messages\Citation;
+use NeuronAI\Chat\Messages\ContentBlocks\ContentBlockInterface;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
@@ -14,8 +14,11 @@ use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
 use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\ToolPayloadMapperInterface;
 use NeuronAI\Tools\ToolInterface;
-use NeuronAI\Tools\ToolPropertyInterface;
+
+use function array_map;
+use function uniqid;
 
 class Gemini implements AIProviderInterface
 {
@@ -35,6 +38,9 @@ class Gemini implements AIProviderInterface
      */
     protected ?string $system = null;
 
+    protected MessageMapperInterface $messageMapper;
+    protected ToolPayloadMapperInterface $toolPayloadMapper;
+
     /**
      * @param array<string, mixed> $parameters
      */
@@ -45,7 +51,7 @@ class Gemini implements AIProviderInterface
         protected ?HttpClientOptions $httpOptions = null,
     ) {
         $config = [
-            // Since Gemini use colon ":" into the URL guzzle fire an exception using base_uri configuration.
+            // Since Gemini use colon ":" into the URL, guzzle fires an exception using base_uri configuration.
             //'base_uri' => trim($this->baseUri, '/').'/',
             'headers' => [
                 'Accept' => 'application/json',
@@ -69,69 +75,92 @@ class Gemini implements AIProviderInterface
 
     public function messageMapper(): MessageMapperInterface
     {
-        return new MessageMapper();
+        return $this->messageMapper ?? $this->messageMapper = new MessageMapper();
     }
 
-    /**
-     * @return array<string, array<int, mixed>>
-     */
-    protected function generateToolsPayload(): array
+    public function toolPayloadMapper(): ToolPayloadMapperInterface
     {
-        $tools = \array_map(function (ToolInterface $tool): array {
-            $payload = [
-                'name' => $tool->getName(),
-                'description' => $tool->getDescription(),
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => new \stdClass(),
-                    'required' => [],
-                ],
-            ];
-
-            $properties = \array_reduce($tool->getProperties(), function (array $carry, ToolPropertyInterface $property) {
-                $carry[$property->getName()] = $property->getJsonSchema();
-                return $carry;
-            }, []);
-
-            if (!empty($properties)) {
-                $payload['parameters'] = [
-                    'type' => 'object',
-                    'properties' => $properties,
-                    'required' => $tool->getRequiredProperties(),
-                ];
-            }
-
-            return $payload;
-        }, $this->tools);
-
-        return [
-            'functionDeclarations' => $tools
-        ];
+        return $this->toolPayloadMapper ?? $this->toolPayloadMapper = new ToolPayloadMapper();
     }
 
     /**
-     * @param array<string, mixed> $message
+     * @param ContentBlockInterface[] $blocks
+     * @param array<int, array> $toolCalls
      * @throws ProviderException
      */
-    protected function createToolCallMessage(array $message): Message
+    protected function createToolCallMessage(array $blocks, array $toolCalls): ToolCallMessage
     {
-        $tools = \array_map(function (array $item): ?\NeuronAI\Tools\ToolInterface {
-            if (!isset($item['functionCall'])) {
-                return null;
-            }
-
+        $tools = array_map(fn (array $item): ToolInterface =>
             // Gemini does not use ID. It uses the tool's name as a unique identifier.
-            return $this->findTool($item['functionCall']['name'])
-                ->setInputs($item['functionCall']['args'])
-                ->setCallId($item['functionCall']['name']);
-        }, $message['parts']);
+            $this->findTool($item['functionCall']['name'])
+            ->setInputs($item['functionCall']['args'])
+            ->setCallId($item['functionCall']['name']), $toolCalls);
 
-        $result = new ToolCallMessage(
-            $message['content'] ?? null,
-            \array_filter($tools)
-        );
-        $result->setRole(MessageRole::MODEL);
+        $message = new ToolCallMessage($blocks, $tools);
 
-        return $result;
+        if (isset($toolCalls[0]['thoughtSignature'])) {
+            $message->addMetadata('thoughtSignature', $toolCalls[0]['thoughtSignature']);
+        }
+
+        return $message;
+    }
+
+    /**
+     * Extract citations from Gemini's groundingMetadata.
+     *
+     * @param array<string, mixed> $groundingMetadata
+     * @return Citation[]
+     */
+    protected function extractCitations(array $groundingMetadata): array
+    {
+        $citations = [];
+
+        // Extract from groundingChunks (web search results)
+        if (isset($groundingMetadata['groundingChunks'])) {
+            foreach ($groundingMetadata['groundingChunks'] as $index => $chunk) {
+                if (isset($chunk['web'])) {
+                    $citations[] = new Citation(
+                        id: 'gemini_chunk_'.$index,
+                        source: $chunk['web']['uri'] ?? '',
+                        title: $chunk['web']['title'] ?? null,
+                        metadata: [
+                            'chunk_index' => $index,
+                            'provider' => 'gemini',
+                        ]
+                    );
+                }
+            }
+        }
+
+        // Extract from groundingSupports (links response text to sources)
+        if (isset($groundingMetadata['groundingSupports'])) {
+            foreach ($groundingMetadata['groundingSupports'] as $support) {
+                $segment = $support['segment'] ?? null;
+                $chunkIndices = $support['groundingChunkIndices'] ?? [];
+                $confidenceScores = $support['confidenceScores'] ?? [];
+
+                foreach ($chunkIndices as $idx => $chunkIndex) {
+                    $sourceChunk = $groundingMetadata['groundingChunks'][$chunkIndex] ?? null;
+
+                    if ($sourceChunk && isset($sourceChunk['web'])) {
+                        $citations[] = new Citation(
+                            id: 'gemini_support_'.uniqid(),
+                            source: $sourceChunk['web']['uri'] ?? '',
+                            title: $sourceChunk['web']['title'] ?? null,
+                            startIndex: $segment['startIndex'] ?? null,
+                            endIndex: $segment['endIndex'] ?? null,
+                            citedText: $segment['text'] ?? null,
+                            metadata: [
+                                'chunk_index' => $chunkIndex,
+                                'confidence' => $confidenceScores[$idx] ?? null,
+                                'provider' => 'gemini',
+                            ]
+                        );
+                    }
+                }
+            }
+        }
+
+        return $citations;
     }
 }

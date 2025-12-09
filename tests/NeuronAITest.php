@@ -4,35 +4,29 @@ declare(strict_types=1);
 
 namespace NeuronAI\Tests;
 
-use NeuronAI\Agent;
-use NeuronAI\AgentInterface;
+use NeuronAI\Agent\Agent;
+use NeuronAI\Agent\AgentInterface;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\RAG\RAG;
-use NeuronAI\SystemPrompt;
+use NeuronAI\Agent\SystemPrompt;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use PHPUnit\Framework\TestCase;
 
+use const PHP_EOL;
+
 class NeuronAITest extends TestCase
 {
-    /**
-     * Sets up the fixture, for example, open a network connection.
-     * This method is called before a test is executed.
-     */
-    public function setUp(): void
-    {
-    }
-
     public function test_agent_instance(): void
     {
         $neuron = new Agent();
         $this->assertInstanceOf(AgentInterface::class, $neuron);
-        $this->assertInstanceOf(ChatHistoryInterface::class, $neuron->resolveChatHistory());
-        $this->assertInstanceOf(InMemoryChatHistory::class, $neuron->resolveChatHistory());
+        $this->assertInstanceOf(ChatHistoryInterface::class, $neuron->getChatHistory());
+        $this->assertInstanceOf(InMemoryChatHistory::class, $neuron->getChatHistory());
 
         $neuron = new RAG();
         $this->assertInstanceOf(Agent::class, $neuron);
@@ -41,7 +35,7 @@ class NeuronAITest extends TestCase
     public function test_system_instructions(): void
     {
         $system = new SystemPrompt(["Agent"]);
-        $this->assertEquals("# IDENTITY AND PURPOSE".\PHP_EOL."Agent", $system);
+        $this->assertEquals("# IDENTITY AND PURPOSE".PHP_EOL."Agent", $system);
 
         $agent = new class () extends Agent {
             public function instructions(): string
@@ -50,7 +44,7 @@ class NeuronAITest extends TestCase
             }
         };
         $this->assertEquals('Hello', $agent->resolveInstructions());
-        $agent->withInstructions('Hello2');
+        $agent->setInstructions('Hello2');
         $this->assertEquals('Hello2', $agent->resolveInstructions());
     }
 
@@ -62,6 +56,6 @@ class NeuronAITest extends TestCase
 
         $this->assertInstanceOf(Message::class, new UserMessage(''));
         $this->assertInstanceOf(Message::class, new AssistantMessage(''));
-        $this->assertInstanceOf(Message::class, new ToolCallMessage('', $tools));
+        $this->assertInstanceOf(Message::class, new ToolCallMessage(tools: $tools));
     }
 }

@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace NeuronAI\Providers;
 
 use NeuronAI\Exceptions\ProviderException;
+use NeuronAI\Tools\ProviderToolInterface;
 use NeuronAI\Tools\ToolInterface;
+
+use function array_filter;
 
 trait HandleWithTools
 {
     /**
-     * https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview
+     * It can contain Neuron Tool instances or tool providers definitions
      *
-     * @var array<ToolInterface>
+     * @var array<ToolInterface|ProviderToolInterface>
      */
     protected array $tools = [];
 
@@ -24,9 +27,12 @@ trait HandleWithTools
 
     public function findTool(string $name): ToolInterface
     {
-        foreach ($this->tools as $tool) {
+        // Remove provider tools
+        $tools = array_filter($this->tools, fn (ToolInterface|ProviderToolInterface $tool): bool => $tool instanceof ToolInterface);
+
+        foreach ($tools as $tool) {
             if ($tool->getName() === $name) {
-                // We return a copy to allow multiple call to the same tool.
+                // We return a copy to allow multiple call to the same tool without rewriting the previous tool call result.
                 return clone $tool;
             }
         }

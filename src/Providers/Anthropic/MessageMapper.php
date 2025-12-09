@@ -4,112 +4,160 @@ declare(strict_types=1);
 
 namespace NeuronAI\Providers\Anthropic;
 
-use NeuronAI\Chat\Attachments\Attachment;
-use NeuronAI\Chat\Enums\AttachmentContentType;
+use NeuronAI\Chat\Messages\ContentBlocks\ContentBlockInterface;
+use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Enums\MessageRole;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Chat\Messages\ToolCallResultMessage;
+use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
 use NeuronAI\Tools\ToolInterface;
+use stdClass;
+
+use function array_map;
+use function array_values;
+use function array_filter;
 
 class MessageMapper implements MessageMapperInterface
 {
-    protected array $mapping = [];
-
     public function map(array $messages): array
     {
-        $this->mapping = [];
+        $mapping = [];
 
         foreach ($messages as $message) {
-            match ($message::class) {
+            $mapping[] = match ($message::class) {
                 Message::class,
                 UserMessage::class,
                 AssistantMessage::class => $this->mapMessage($message),
                 ToolCallMessage::class => $this->mapToolCall($message),
-                ToolCallResultMessage::class => $this->mapToolsResult($message),
+                ToolResultMessage::class => $this->mapToolsResult($message),
                 default => throw new ProviderException('Could not map message type '.$message::class),
             };
         }
 
-        return $this->mapping;
+        return $mapping;
     }
 
-    protected function mapMessage(Message $message): void
+    protected function mapMessage(Message $message): array
     {
-        $payload = $message->jsonSerialize();
-
-        if (\array_key_exists('usage', $payload)) {
-            unset($payload['usage']);
-        }
-
-        $attachments = $message->getAttachments();
-
-        if (\is_string($payload['content']) && $attachments) {
-            $payload['content'] = [
-                [
-                    'type' => 'text',
-                    'text' => $payload['content'],
-                ],
-            ];
-        }
-
-        foreach ($attachments as $attachment) {
-            $payload['content'][] = $this->mapAttachment($attachment);
-        }
-
-        unset($payload['attachments']);
-
-        $this->mapping[] = $payload;
+        return [
+            'role' => $message->getRole(),
+            'content' => $this->mapBlocks($message->getContentBlocks()),
+        ];
     }
 
-    protected function mapAttachment(Attachment $attachment): array
+    protected function mapBlocks(array $blocks): array
     {
-        return match($attachment->contentType) {
-            AttachmentContentType::URL => [
-                'type' => $attachment->type->value,
+        return array_filter(array_map($this->mapSingleBlock(...), $blocks));
+    }
+
+    protected function mapSingleBlock(ContentBlockInterface $block): ?array
+    {
+        return match ($block::class) {
+            TextContent::class => [
+                'type' => 'text',
+                'text' => $block->content,
+            ],
+            ReasoningContent::class => [
+                'type' => 'thinking',
+                'thinking' => $block->content,
+                'signature' => $block->id,
+            ],
+            ImageContent::class => $this->mapImageBlock($block),
+            FileContent::class => $this->mapFileBlock($block),
+            default => null,
+        };
+    }
+
+    protected function mapImageBlock(ImageContent $block): array
+    {
+        return match ($block->sourceType) {
+            SourceType::URL => [
+                'type' => 'image',
                 'source' => [
                     'type' => 'url',
-                    'url' => $attachment->content,
+                    'url' => $block->content,
                 ],
             ],
-            AttachmentContentType::BASE64 => [
-                'type' => $attachment->type->value,
+            SourceType::BASE64 => [
+                'type' => 'image',
                 'source' => [
                     'type' => 'base64',
-                    'media_type' => $attachment->mediaType,
-                    'data' => $attachment->content,
+                    'media_type' => $block->mediaType,
+                    'data' => $block->content,
                 ],
             ],
         };
     }
 
-    protected function mapToolCall(ToolCallMessage $message): void
+    protected function mapFileBlock(FileContent $block): array
     {
-        $message = $message->jsonSerialize();
-
-        if (\array_key_exists('usage', $message)) {
-            unset($message['usage']);
-        }
-
-        unset($message['type']);
-        unset($message['tools']);
-
-        $this->mapping[] = $message;
+        return match ($block->sourceType) {
+            SourceType::URL => [
+                'type' => 'document',
+                'source' => [
+                    'type' => 'url',
+                    'url' => $block->content,
+                ],
+            ],
+            SourceType::BASE64 => [
+                'type' => 'document',
+                'source' => [
+                    'type' => 'base64',
+                    'media_type' => $block->mediaType,
+                    'data' => $block->content,
+                ],
+            ],
+        };
     }
 
-    protected function mapToolsResult(ToolCallResultMessage $message): void
+    protected function mapToolCall(ToolCallMessage $message): array
     {
-        $this->mapping[] = [
+        $parts = [];
+
+        // Add text content if present
+        if ($contentBlocks = $message->getContentBlocks()) {
+            $parts = array_map($this->mapSingleBlock(...), $contentBlocks);
+        }
+
+        // Add tool call blocks from the tool array
+        foreach ($message->getTools() as $tool) {
+            $parts[] = [
+                'type' => 'tool_use',
+                'id' => $tool->getCallId(),
+                'name' => $tool->getName(),
+                'input' => $tool->getInputs() ?: new stdClass(),
+            ];
+        }
+
+        return [
+            'role' => MessageRole::ASSISTANT,
+            'content' => $parts,
+        ];
+    }
+
+    protected function mapToolsResult(ToolResultMessage $message): array
+    {
+        $parts = array_map(fn (ToolInterface $tool): array => [
+            'type' => 'tool_result',
+            'tool_use_id' => $tool->getCallId(),
+            'content' => $tool->getResult(),
+        ], $message->getTools());
+
+        if ($contentBlocks = $message->getContentBlocks()) {
+            $parts = [...$parts, ...$this->mapBlocks($contentBlocks)];
+        }
+
+        return [
             'role' => MessageRole::USER,
-            'content' => \array_map(fn (ToolInterface $tool): array => [
-                'type' => 'tool_result',
-                'tool_use_id' => $tool->getCallId(),
-                'content' => $tool->getResult(),
-            ], $message->getTools())
+            'content' => array_values($parts),
         ];
     }
 }

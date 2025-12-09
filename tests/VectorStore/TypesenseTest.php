@@ -11,6 +11,9 @@ use NeuronAI\Tests\Traits\CheckOpenPort;
 use PHPUnit\Framework\TestCase;
 use Typesense\Client;
 
+use function file_get_contents;
+use function json_decode;
+
 class TypesenseTest extends TestCase
 {
     use CheckOpenPort;
@@ -42,7 +45,7 @@ class TypesenseTest extends TestCase
         ]);
 
         // embedding "Hello World!"
-        $this->embedding = \json_decode(\file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
+        $this->embedding = json_decode(file_get_contents(__DIR__ . '/../Stubs/hello-world.embeddings'), true);
     }
 
     public function test_typesense_instance(): void
@@ -60,6 +63,22 @@ class TypesenseTest extends TestCase
         $document->embedding = $this->embedding;
 
         $store->addDocument($document);
+
+        $results = $store->similaritySearch($this->embedding);
+
+        $this->assertEquals($document->getContent(), $results[0]->getContent());
+        $this->assertEquals($document->metadata['customProperty'], $results[0]->metadata['customProperty']);
+    }
+
+    public function test_add_documents(): void
+    {
+        $store = new TypesenseVectorStore($this->client, 'test', $this->vectorDimension);
+
+        $document = new Document('Hello World!');
+        $document->addMetadata('customProperty', 'customValue');
+        $document->embedding = $this->embedding;
+
+        $store->addDocuments([$document]);
 
         $results = $store->similaritySearch($this->embedding);
 

@@ -6,10 +6,20 @@ namespace NeuronAI\Providers\Gemini;
 
 use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\RequestOptions;
-use NeuronAI\Chat\Enums\MessageRole;
+use NeuronAI\Chat\Enums\SourceType;
+use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Usage;
+use NeuronAI\Exceptions\ProviderException;
 use Psr\Http\Message\ResponseInterface;
+
+use function array_filter;
+use function array_key_exists;
+use function json_decode;
+use function trim;
 
 trait HandleChat
 {
@@ -34,38 +44,72 @@ trait HandleChat
         }
 
         if (!empty($this->tools)) {
-            $json['tools'] = $this->generateToolsPayload();
+            $json['tools'] = $this->toolPayloadMapper()->map($this->tools);
         }
 
-        return $this->client->postAsync(\trim($this->baseUri, '/')."/{$this->model}:generateContent", [RequestOptions::JSON => $json])
+        return $this->client->postAsync(trim($this->baseUri, '/')."/{$this->model}:generateContent", [RequestOptions::JSON => $json])
             ->then(function (ResponseInterface $response): Message {
-                $result = \json_decode($response->getBody()->getContents(), true);
-
-                $content = $result['candidates'][0]['content'];
-
-                if (!isset($content['parts']) && isset($result['candidates'][0]['finishReason']) && $result['candidates'][0]['finishReason'] === 'MAX_TOKENS') {
-                    return new Message(MessageRole::from($content['role']), '');
-                }
-
-                $parts = $content['parts'];
-
-                if (\array_key_exists('functionCall', $parts[0]) && !empty($parts[0]['functionCall'])) {
-                    $response = $this->createToolCallMessage($content);
-                } else {
-                    $response = new Message(MessageRole::from($content['role']), $parts[0]['text'] ?? '');
-                }
-
-                // Attach the usage for the current interaction
-                if (\array_key_exists('usageMetadata', $result)) {
-                    $response->setUsage(
-                        new Usage(
-                            $result['usageMetadata']['promptTokenCount'],
-                            $result['usageMetadata']['candidatesTokenCount'] ?? 0
-                        )
-                    );
-                }
-
-                return $response;
+                $result = json_decode($response->getBody()->getContents(), true);
+                return $this->processChatResult($result);
             });
+    }
+
+    /**
+     * @throws ProviderException
+     */
+    protected function processChatResult(array $result): AssistantMessage
+    {
+        $content = $result['candidates'][0]['content'];
+
+        if (!isset($content['parts']) && isset($result['candidates'][0]['finishReason']) && $result['candidates'][0]['finishReason'] === 'MAX_TOKENS') {
+            return new AssistantMessage('');
+        }
+
+        $blocks = [];
+        foreach ($content['parts'] as $part) {
+            if (isset($part['text'])) {
+                $blocks[] = $part['thought'] ?? false
+                    ? new ReasoningContent($part['text'])
+                    : new TextContent($part['text']);
+            }
+
+            if (isset($part['inlineData'])) {
+                $blocks[] = new ImageContent(
+                    $part['inlineData']['data'],
+                    SourceType::BASE64,
+                    $part['inlineData']['mimeType']
+                );
+            }
+
+            if (isset($part['functionCall'])) {
+                $toolCalls = array_filter($content['parts'], fn (array $item): bool => isset($item['functionCall']));
+                $message = $this->createToolCallMessage($blocks, $toolCalls);
+                break;
+            }
+        }
+
+        if (!isset($message)) {
+            $message = new AssistantMessage($blocks);
+        }
+
+        if (array_key_exists('groundingMetadata', $result['candidates'][0])) {
+            // Extract citations from groundingMetadata
+            $citations = $this->extractCitations($result['candidates'][0]['groundingMetadata']);
+            if (!empty($citations)) {
+                $message->addMetadata('citations', $citations);
+            }
+        }
+
+        // Attach the usage for the current interaction
+        if (array_key_exists('usageMetadata', $result)) {
+            $message->setUsage(
+                new Usage(
+                    $result['usageMetadata']['promptTokenCount'],
+                    $result['usageMetadata']['candidatesTokenCount'] ?? 0
+                )
+            );
+        }
+
+        return $message;
     }
 }

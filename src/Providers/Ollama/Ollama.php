@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace NeuronAI\Providers\Ollama;
 
 use GuzzleHttp\Client;
-use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
@@ -13,8 +12,11 @@ use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
 use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\ToolPayloadMapperInterface;
 use NeuronAI\Tools\ToolInterface;
-use NeuronAI\Tools\ToolPropertyInterface;
+
+use function array_map;
+use function trim;
 
 class Ollama implements AIProviderInterface
 {
@@ -26,6 +28,9 @@ class Ollama implements AIProviderInterface
 
     protected ?string $system = null;
 
+    protected MessageMapperInterface $messageMapper;
+    protected ToolPayloadMapperInterface $toolPayloadMapper;
+
     /**
      * @param array<string, mixed> $parameters
      */
@@ -36,7 +41,8 @@ class Ollama implements AIProviderInterface
         protected ?HttpClientOptions $httpOptions = null,
     ) {
         $config = [
-            'base_uri' => \trim($this->url, '/').'/',
+            'base_uri' => trim($this->url, '/').'/',
+            'headers' => [],
         ];
 
         if ($this->httpOptions instanceof HttpClientOptions) {
@@ -55,63 +61,23 @@ class Ollama implements AIProviderInterface
 
     public function messageMapper(): MessageMapperInterface
     {
-        return new MessageMapper();
+        return $this->messageMapper ?? $this->messageMapper = new MessageMapper();
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    protected function generateToolsPayload(): array
+    public function toolPayloadMapper(): ToolPayloadMapperInterface
     {
-        return \array_map(function (ToolInterface $tool): array {
-            $payload = [
-                'type' => 'function',
-                'function' => [
-                    'name' => $tool->getName(),
-                    'description' => $tool->getDescription(),
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => new \stdClass(),
-                        'required' => [],
-                    ]
-                ],
-            ];
-
-            $properties = \array_reduce($tool->getProperties(), function (array $carry, ToolPropertyInterface $property): array {
-                $carry[$property->getName()] = [
-                    'type' => $property->getType()->value,
-                    'description' => $property->getDescription(),
-                ];
-
-                return $carry;
-            }, []);
-
-            if (! empty($properties)) {
-                $payload['function']['parameters'] = [
-                    'type' => 'object',
-                    'properties' => $properties,
-                    'required' => $tool->getRequiredProperties(),
-                ];
-            }
-
-            return $payload;
-        }, $this->tools);
+        return $this->toolPayloadMapper ?? $this->toolPayloadMapper = new ToolPayloadMapper();
     }
 
     /**
-     * @param array<string, mixed> $message
+     * @param array<string, mixed> $toolCalls
      * @throws ProviderException
      */
-    protected function createToolCallMessage(array $message): Message
+    protected function createToolCallMessage(array $toolCalls, array|string|null $content = null): ToolCallMessage
     {
-        $tools = \array_map(fn (array $item): ToolInterface => $this->findTool($item['function']['name'])
-            ->setInputs($item['function']['arguments']), $message['tool_calls']);
+        $tools = array_map(fn (array $item): ToolInterface => $this->findTool($item['function']['name'])
+            ->setInputs($item['function']['arguments']), $toolCalls);
 
-        $result = new ToolCallMessage(
-            $message['content'],
-            $tools
-        );
-
-        return $result->addMetadata('tool_calls', $message['tool_calls']);
+        return new ToolCallMessage($content, $tools);
     }
 }

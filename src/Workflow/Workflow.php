@@ -4,25 +4,46 @@ declare(strict_types=1);
 
 namespace NeuronAI\Workflow;
 
+use Generator;
 use NeuronAI\Exceptions\WorkflowException;
+use NeuronAI\Observability\EventBus;
 use NeuronAI\Observability\Events\AgentError;
 use NeuronAI\Observability\Events\WorkflowEnd;
 use NeuronAI\Observability\Events\WorkflowNodeEnd;
 use NeuronAI\Observability\Events\WorkflowNodeStart;
 use NeuronAI\Observability\Events\WorkflowStart;
-use NeuronAI\Observability\Observable;
+use NeuronAI\Observability\ObserverInterface;
+use NeuronAI\StaticConstructor;
+use NeuronAI\Workflow\Events\Event;
+use NeuronAI\Workflow\Events\StartEvent;
+use NeuronAI\Workflow\Events\StopEvent;
+use NeuronAI\Workflow\Exporter\ConsoleExporter;
 use NeuronAI\Workflow\Exporter\ExporterInterface;
-use NeuronAI\Workflow\Exporter\MermaidExporter;
+use NeuronAI\Workflow\Interrupt\InterruptRequest;
 use NeuronAI\Workflow\Persistence\InMemoryPersistence;
 use NeuronAI\Workflow\Persistence\PersistenceInterface;
-use SplSubject;
+use ReflectionClass;
+use ReflectionException;
+use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
+use Throwable;
+
+use function array_merge;
+use function count;
+use function is_a;
+use function is_array;
+use function is_null;
+use function uniqid;
 
 /**
- * @method static static make(?PersistenceInterface $persistence = null, ?string $workflowId = null)
+ * @method static static make(?WorkflowState $state = null, ?PersistenceInterface $persistence = null, ?string $workflowId = null)
  */
-class Workflow implements SplSubject
+class Workflow implements WorkflowInterface
 {
-    use Observable;
+    use StaticConstructor;
+    use HandleMiddleware;
+    use ResolveState;
 
     /**
      * @var NodeInterface[]
@@ -30,195 +51,249 @@ class Workflow implements SplSubject
     protected array $nodes = [];
 
     /**
-     * @var Edge[]
+     * @var array<class-string, NodeInterface>
      */
-    protected array $edges = [];
-
-    protected ?string $startNode = null;
-
-    protected ?array $endNodes = null;
+    protected array $eventNodeMap = [];
 
     protected ExporterInterface $exporter;
 
-    protected PersistenceInterface $persistence;
-
     protected string $workflowId;
 
-    public function __construct(?PersistenceInterface $persistence = null, ?string $workflowId = null)
-    {
-        $this->exporter = new MermaidExporter();
+    protected Event $startEvent;
 
-        if (\is_null($persistence) && !\is_null($workflowId)) {
+    /**
+     * @throws WorkflowException
+     */
+    public function __construct(
+        protected ?WorkflowState $state = null,
+        protected ?PersistenceInterface $persistence = null,
+        ?string $workflowId = null
+    ) {
+        $this->exporter = new ConsoleExporter();
+
+        if (is_null($persistence) && !is_null($workflowId)) {
             throw new WorkflowException('Persistence must be defined when workflowId is defined');
         }
-        if (\is_null($workflowId) && !\is_null($persistence)) {
+
+        if (!is_null($persistence) && is_null($workflowId)) {
             throw new WorkflowException('WorkflowId must be defined when persistence is defined');
         }
 
         $this->persistence = $persistence ?? new InMemoryPersistence();
-        $this->workflowId = $workflowId ?? \uniqid('neuron_workflow_');
-    }
+        $this->workflowId = $workflowId ?? uniqid('workflow_');
 
-    public function validate(): void
-    {
-        /*if ($this->getStartNode() === null) {
-            throw new WorkflowException('Start node must be defined');
-        }
-
-        if ($this->getEndNode() === null) {
-            throw new WorkflowException('End node must be defined');
-        }*/
-
-        if (!isset($this->getNodes()[$this->getStartNode()])) {
-            throw new WorkflowException("Start node {$this->getStartNode()} does not exist");
-        }
-
-        foreach ($this->getEndNodes() as $endNode) {
-            if (!isset($this->getNodes()[$endNode])) {
-                throw new WorkflowException("End node {$endNode} does not exist");
-            }
-        }
-
-        foreach ($this->getEdges() as $edge) {
-            if (!isset($this->getNodes()[$edge->getFrom()])) {
-                throw new WorkflowException("Edge from node {$edge->getFrom()} does not exist");
-            }
-
-            if (!isset($this->getNodes()[$edge->getTo()])) {
-                throw new WorkflowException("Edge to node {$edge->getTo()} does not exist");
-            }
+        // Register the node middleware
+        $global = $this->globalMiddleware();
+        foreach ($this->middleware() as $node => $middleware) {
+            $middleware = is_array($middleware) ? $middleware : [$middleware];
+            $this->addMiddleware($node, array_merge($middleware, $global));
         }
     }
 
     /**
-     * @throws WorkflowInterrupt|WorkflowException|\Throwable
+     * Register an observer to receive events.
      */
-    protected function execute(
-        string $currentNode,
-        WorkflowState $state,
-        bool $resuming = false,
-        array|string|int $humanFeedback = []
-    ): WorkflowState {
-        $context = new WorkflowContext(
-            $this->workflowId,
-            $currentNode,
-            $this->persistence,
-            $state
-        );
-
-        if ($resuming) {
-            $context->setResuming(true, [$currentNode => $humanFeedback]);
-        }
-
-        try {
-            while (!\in_array($currentNode, $this->getEndNodes())) {
-                $node = $this->nodes[$currentNode];
-                $node->setContext($context);
-
-                $this->notify('workflow-node-start', new WorkflowNodeStart($currentNode, $state));
-                try {
-                    $state = $node->run($state);
-                } catch (WorkflowInterrupt $interrupt) {
-                    throw $interrupt;
-                } catch (\Throwable $exception) {
-                    $this->notify('error', new AgentError($exception));
-                    throw $exception;
-                }
-                $this->notify('workflow-node-end', new WorkflowNodeEnd($currentNode, $state));
-
-                $nextNode = $this->findNextNode($currentNode, $state);
-
-                if ($nextNode === null) {
-                    throw new WorkflowException("No valid edge found from node {$currentNode}");
-                }
-
-                $currentNode = $nextNode;
-
-                // Update the context before the next iteration or end node
-                $context = new WorkflowContext(
-                    $this->workflowId,
-                    $currentNode,
-                    $this->persistence,
-                    $state
-                );
-            }
-
-            $endNode = $this->nodes[$currentNode];
-            $endNode->setContext($context);
-            $result = $endNode->run($state);
-            $this->persistence->delete($this->workflowId);
-            return $result;
-
-        } catch (WorkflowInterrupt $interrupt) {
-            $this->persistence->save($this->workflowId, $interrupt);
-            $this->notify('workflow-interrupt', $interrupt);
-            throw $interrupt;
-        }
+    public function observe(ObserverInterface $observer): self
+    {
+        EventBus::observe($observer);
+        return $this;
     }
 
     /**
-     * @throws WorkflowInterrupt|WorkflowException|\Throwable
+     * Configure workflow persistence.
      */
-    public function run(?WorkflowState $initialState = null): WorkflowState
+    public function setPersistence(PersistenceInterface $persistence, string $workflowId): self
     {
-        $this->notify('workflow-start', new WorkflowStart($this->getNodes(), $this->getEdges()));
-        try {
-            $this->validate();
-        } catch (WorkflowException $exception) {
-            $this->notify('error', new AgentError($exception));
-            throw $exception;
+        $this->persistence = $persistence;
+        $this->workflowId = $workflowId;
+        return $this;
+    }
+
+    /**
+     * Start or resume the workflow.
+     */
+    public function start(?InterruptRequest $resumeRequest = null): WorkflowHandler
+    {
+        $isResume = $resumeRequest instanceof InterruptRequest;
+        return new WorkflowHandler($this, $isResume, $resumeRequest);
+    }
+
+    /**
+     * Set a custom start event with initial data.
+     */
+    public function setStartEvent(Event $event): self
+    {
+        $this->startEvent = $event;
+        return $this;
+    }
+
+    /**
+     * Create the default start event for this workflow.
+     */
+    protected function startEvent(): Event
+    {
+        return new StartEvent();
+    }
+
+    /**
+     * Resolve the start event for this workflow.
+     */
+    protected function resolveStartEvent(): Event
+    {
+        return $this->startEvent ?? $this->startEvent = $this->startEvent();
+    }
+
+    /**
+     * Run the middleware pipeline around node execution.
+     */
+    protected function runMiddlewarePipeline(Event $event, NodeInterface $node, WorkflowState $state): Event|Generator
+    {
+        $middleware = $this->getMiddlewareForNode($node);
+
+        // Execute all before() methods in registration order
+        foreach ($middleware as $m) {
+            $m->before($node, $event, $state);
         }
 
-        $state = $initialState ?? new WorkflowState();
-        $currentNode = $this->getStartNode();
+        // Execute the node
+        $result = $node->run($event, $state);
 
-        $result = $this->execute($currentNode, $state);
-        $this->notify('workflow-end', new WorkflowEnd($result));
+        // Execute all after() methods in registration order
+        foreach ($middleware as $m) {
+            $m->after($node, $event, $result, $state);
+        }
 
         return $result;
     }
 
     /**
-     * @throws WorkflowInterrupt|WorkflowException|\Throwable
+     * @throws WorkflowInterrupt|WorkflowException|Throwable
      */
-    public function resume(array|string|int $humanFeedback): WorkflowState
+    public function run(): Generator|WorkflowState
     {
-        $this->notify('workflow-resume', new WorkflowStart($this->getNodes(), $this->getEdges()));
-        $interrupt = $this->persistence->load($this->workflowId);
+        EventBus::emit('workflow-start', $this, new WorkflowStart($this->eventNodeMap));
 
-        $state = $interrupt->getState();
-        $currentNode = $interrupt->getCurrentNode();
+        try {
+            $this->bootstrap();
+        } catch (WorkflowException $exception) {
+            EventBus::emit('error', $this, new AgentError($exception));
+            throw $exception;
+        }
 
-        $result = $this->execute(
-            $currentNode,
-            $state,
-            true,
-            $humanFeedback
-        );
-        $this->notify('workflow-end', new WorkflowEnd($result));
+        $startEvent = $this->resolveStartEvent();
+        yield from $this->execute($startEvent, $this->eventNodeMap[$startEvent::class]);
 
-        return  $result;
+        EventBus::emit('workflow-end', $this, new WorkflowEnd($this->resolveState()));
+
+        return $this->resolveState();
     }
 
     /**
-     * @return Node[]
+     * @throws WorkflowInterrupt|WorkflowException|Throwable
+     */
+    public function resume(InterruptRequest $resumeRequest): Generator|WorkflowState
+    {
+        EventBus::emit('workflow-resume', $this, new WorkflowStart($this->eventNodeMap));
+
+        try {
+            $this->bootstrap();
+        } catch (WorkflowException $exception) {
+            EventBus::emit('error', $this, new AgentError($exception));
+            throw $exception;
+        }
+
+        $interrupt = $this->persistence->load($this->workflowId);
+        $this->setState($interrupt->getState());
+
+        yield from $this->execute(
+            $interrupt->getEvent(),
+            $interrupt->getNode(),
+            true,
+            $resumeRequest
+        );
+
+        EventBus::emit('workflow-end', $this, new WorkflowEnd($this->resolveState()));
+
+        return $this->resolveState();
+    }
+
+    /**
+     * @throws WorkflowInterrupt|WorkflowException|Throwable
+     */
+    protected function execute(
+        Event $currentEvent,
+        NodeInterface $currentNode,
+        bool $resuming = false,
+        ?Interrupt\InterruptRequest $resumeRequest = null
+    ): Generator {
+        try {
+            while (!($currentEvent instanceof StopEvent)) {
+                $currentNode->setWorkflowContext(
+                    $this->resolveState(),
+                    $currentEvent,
+                    $resuming,
+                    $resumeRequest
+                );
+
+                EventBus::emit('workflow-node-start', $this, new WorkflowNodeStart($currentNode::class, $this->resolveState()));
+                try {
+                    // Execute node through the middleware pipeline
+                    $result = $this->runMiddlewarePipeline($currentEvent, $currentNode, $this->resolveState());
+
+                    if ($result instanceof Generator) {
+                        foreach ($result as $event) {
+                            yield $event;
+                        }
+
+                        $currentEvent = $result->getReturn();
+                    } else {
+                        $currentEvent = $result;
+                    }
+                } catch (WorkflowInterrupt $interrupt) {
+                    // Interruptions are intentional, not errors - let them bubble to outer catch
+                    throw $interrupt;
+                } catch (Throwable $exception) {
+                    // Only notify for actual errors
+                    EventBus::emit('error', $this, new AgentError($exception));
+                    throw $exception;
+                }
+                EventBus::emit('workflow-node-end', $this, new WorkflowNodeEnd($currentNode::class, $this->resolveState()));
+
+                if ($currentEvent instanceof StopEvent) {
+                    break;
+                }
+
+                $nextEventClass = $currentEvent::class;
+                if (!isset($this->eventNodeMap[$nextEventClass])) {
+                    throw new WorkflowException("No node found that handle event: " . $nextEventClass);
+                }
+
+                $currentNode = $this->eventNodeMap[$nextEventClass];
+                $resuming = false; // Only the first node should be in resuming mode
+                $resumeRequest = null;
+            }
+
+            $this->persistence->delete($this->workflowId);
+
+        } catch (WorkflowInterrupt $interrupt) {
+            $this->persistence->save($this->workflowId, $interrupt);
+            EventBus::emit('error', $this, new AgentError($interrupt, false));
+            throw $interrupt;
+        }
+    }
+
+    /**
+     * @return NodeInterface[]
      */
     protected function nodes(): array
     {
         return [];
     }
 
-    /**
-     * @return Edge[]
-     */
-    protected function edges(): array
+    public function addNode(NodeInterface $node): Workflow
     {
-        return [];
-    }
+        $this->nodes[] = $node;
 
-    public function addNode(NodeInterface $node): self
-    {
-        $this->nodes[$node::class] = $node;
         return $this;
     }
 
@@ -230,93 +305,150 @@ class Workflow implements SplSubject
         foreach ($nodes as $node) {
             $this->addNode($node);
         }
+
         return $this;
     }
 
     /**
-     * @return array<string, NodeInterface>
+     * @return NodeInterface[]
      */
-    public function getNodes(): array
+    protected function getNodes(): array
     {
-        if ($this->nodes === []) {
-            foreach ($this->nodes() as $node) {
-                $this->addNode($node);
+        return array_merge($this->nodes(), $this->nodes);
+    }
+
+    /**
+     * @throws WorkflowException
+     */
+    protected function bootstrap(): void
+    {
+        $this->loadEventNodeMap();
+        $this->validate();
+    }
+
+    /**
+     * @throws WorkflowException
+     */
+    protected function loadEventNodeMap(): void
+    {
+        $this->eventNodeMap = [];
+
+        foreach ($this->getNodes() as $node) {
+            if (!$node instanceof NodeInterface) {
+                throw new WorkflowException('All nodes must implement ' . NodeInterface::class);
+            }
+
+            $this->validateInvokeMethodSignature($node);
+
+            try {
+                $reflection = new ReflectionClass($node);
+                $method = $reflection->getMethod('__invoke');
+                $parameters = $method->getParameters();
+                $firstParam = $parameters[0];
+                $firstParamType = $firstParam->getType();
+
+                if ($firstParamType instanceof ReflectionNamedType) {
+                    $eventClass = $firstParamType->getName();
+
+                    if (isset($this->eventNodeMap[$eventClass])) {
+                        throw new WorkflowException("Node for event {$eventClass} already exists");
+                    }
+
+                    $this->eventNodeMap[$eventClass] = $node;
+                }
+            } catch (ReflectionException $e) {
+                throw new WorkflowException('Failed to load event-node map for '.$node::class.': ' . $e->getMessage());
             }
         }
-
-        return $this->nodes;
     }
 
-    public function addEdge(Edge $edge): self
+    public function getEventNodeMap(): array
     {
-        $this->edges[] = $edge;
-        return $this;
+        return $this->eventNodeMap;
     }
 
     /**
-     * @param Edge[] $edges
+     * @throws WorkflowException
      */
-    public function addEdges(array $edges): Workflow
+    protected function validate(): void
     {
-        foreach ($edges as $edge) {
-            $this->addEdge($edge);
+        $startEvent = $this->resolveStartEvent();
+        $startEventClass = $startEvent::class;
+
+        if (!isset($this->eventNodeMap[$startEventClass])) {
+            throw new WorkflowException('No nodes found that handle '.$startEventClass);
         }
-        return $this;
     }
 
     /**
-     * @return Edge[]
+     * @throws WorkflowException
      */
-    public function getEdges(): array
+    protected function validateInvokeMethodSignature(NodeInterface $node): void
     {
-        if ($this->edges === []) {
-            $this->edges = $this->edges();
-        }
+        try {
+            $reflection = new ReflectionClass($node);
 
-        return $this->edges;
-    }
-
-    public function setStart(string $nodeClass): Workflow
-    {
-        $this->startNode = $nodeClass;
-        return $this;
-    }
-
-    public function setEnd(string $nodeClass): Workflow
-    {
-        $this->endNodes[] = $nodeClass;
-        return $this;
-    }
-
-    protected function getStartNode(): string
-    {
-        return $this->startNode ?? $this->start();
-    }
-
-    protected function getEndNodes(): array
-    {
-        return $this->endNodes ?? $this->end();
-    }
-
-    protected function start(): ?string
-    {
-        throw new WorkflowException('Start node must be defined');
-    }
-
-    protected function end(): array
-    {
-        throw new WorkflowException('End node must be defined');
-    }
-
-    private function findNextNode(string $currentNode, WorkflowState $state): ?string
-    {
-        foreach ($this->getEdges() as $edge) {
-            if ($edge->getFrom() === $currentNode && $edge->shouldExecute($state)) {
-                return $edge->getTo();
+            if (!$reflection->hasMethod('__invoke')) {
+                throw new WorkflowException('Failed to validate '.$node::class.': Missing __invoke method');
             }
-        }
 
-        return null;
+            $method = $reflection->getMethod('__invoke');
+            $parameters = $method->getParameters();
+
+            if (count($parameters) !== 2) {
+                throw new WorkflowException('Failed to validate '.$node::class.': __invoke method must have exactly 2 parameters');
+            }
+
+            $firstParam = $parameters[0];
+            $secondParam = $parameters[1];
+
+            if (!$firstParam->hasType() || !$firstParam->getType() instanceof ReflectionType) {
+                throw new WorkflowException('Failed to validate '.$node::class.': First parameter of __invoke method must have a type declaration');
+            }
+
+            if (!$secondParam->hasType() || !$secondParam->getType() instanceof ReflectionType) {
+                throw new WorkflowException('Failed to validate '.$node::class.': Second parameter of __invoke method must have a type declaration');
+            }
+
+            $firstParamType = $firstParam->getType();
+            $secondParamType = $secondParam->getType();
+
+            if ($firstParamType instanceof ReflectionUnionType) {
+                throw new WorkflowException('Failed to validate '.$node::class.': Nodes can handle only one event type.');
+            }
+
+            if (!($firstParamType instanceof ReflectionNamedType) || !is_a($firstParamType->getName(), Event::class, true)) {
+                throw new WorkflowException('Failed to validate '.$node::class.': First parameter of __invoke method must be a type that implements ' . Event::class);
+            }
+
+            if (!($secondParamType instanceof ReflectionNamedType) || !is_a($secondParamType->getName(), WorkflowState::class, true)) {
+                throw new WorkflowException('Failed to validate '.$node::class.': Second parameter of __invoke method must be ' . WorkflowState::class);
+            }
+
+            $returnType = $method->getReturnType();
+
+            if ($returnType instanceof ReflectionNamedType) {
+                // Handle single return types
+                if (!is_a($returnType->getName(), Event::class, true) && !is_a($returnType->getName(), Generator::class, true)) {
+                    throw new WorkflowException('Failed to validate '.$node::class.': __invoke method must return a type that implements ' . Event::class);
+                }
+            } elseif ($returnType instanceof ReflectionUnionType) {
+                // Handle union return type - all types must implement Event interface or be a Generator
+                foreach ($returnType->getTypes() as $type) {
+                    if (
+                        !($type instanceof ReflectionNamedType) ||
+                        (!is_a($type->getName(), Event::class, true) && !is_a($type->getName(), Generator::class, true))
+                    ) {
+                        throw new WorkflowException('Failed to validate '.$node::class.': All return types in union must implement ' . Event::class);
+                    }
+                }
+            } else {
+                throw new WorkflowException('Failed to validate '.$node::class.': __invoke method must return a type that implements ' . Event::class);
+            }
+
+        } catch (ReflectionException $e) {
+            throw new WorkflowException('Failed to validate '.$node::class.': ' . $e->getMessage());
+        }
     }
 
     public function getWorkflowId(): string
@@ -324,9 +456,16 @@ class Workflow implements SplSubject
         return $this->workflowId;
     }
 
+    /**
+     * @throws WorkflowException
+     */
     public function export(): string
     {
-        return $this->exporter->export($this);
+        if ($this->eventNodeMap === []) {
+            $this->bootstrap();
+        }
+
+        return $this->exporter->export($this->eventNodeMap);
     }
 
     public function setExporter(ExporterInterface $exporter): Workflow

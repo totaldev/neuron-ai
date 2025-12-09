@@ -4,25 +4,29 @@ declare(strict_types=1);
 
 namespace NeuronAI\Providers\Ollama;
 
-use NeuronAI\Chat\Attachments\Attachment;
-use NeuronAI\Chat\Enums\AttachmentContentType;
-use NeuronAI\Chat\Enums\AttachmentType;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Enums\MessageRole;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Chat\Messages\ToolCallResultMessage;
+use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
+use stdClass;
+
+use function array_key_exists;
+use function array_map;
 
 class MessageMapper implements MessageMapperInterface
 {
-    /**
-     * Mapped messages.
-     */
     protected array $mapping = [];
 
+    /**
+     * @throws ProviderException
+     */
     public function map(array $messages): array
     {
         $this->mapping = [];
@@ -33,7 +37,7 @@ class MessageMapper implements MessageMapperInterface
                 UserMessage::class,
                 AssistantMessage::class => $this->mapMessage($message),
                 ToolCallMessage::class => $this->mapToolCall($message),
-                ToolCallResultMessage::class => $this->mapToolsResult($message),
+                ToolResultMessage::class => $this->mapToolsResult($message),
                 default => throw new ProviderException('Could not map message type '.$message::class),
             };
         }
@@ -43,59 +47,54 @@ class MessageMapper implements MessageMapperInterface
 
     public function mapMessage(Message $message): void
     {
-        $payload = $message->jsonSerialize();
+        $contentBlocks = $message->getContentBlocks();
+        $textContent = '';
+        $images = [];
 
-        if (\array_key_exists('usage', $payload)) {
-            unset($payload['usage']);
-        }
-
-        $attachments = $message->getAttachments();
-
-        foreach ($attachments as $attachment) {
-            if ($attachment->type === AttachmentType::DOCUMENT) {
-                throw new ProviderException('This provider does not support document attachments.');
+        foreach ($contentBlocks as $block) {
+            if ($block instanceof TextContent) {
+                $textContent .= $block->content;
+            } elseif ($block instanceof ImageContent) {
+                if ($block->sourceType === SourceType::URL) {
+                    throw new ProviderException('Ollama supports only base64 image type.');
+                }
+                $images[] = $block->content;
             }
-
-            $payload['images'][] = $this->mapAttachment($attachment);
         }
 
-        unset($payload['attachments']);
+        $payload = [
+            'role' => $message->getRole(),
+            'content' => $textContent,
+        ];
+
+        if ($images !== []) {
+            $payload['images'] = $images;
+        }
 
         $this->mapping[] = $payload;
     }
 
-    protected function mapAttachment(Attachment $attachment): string
-    {
-        return match ($attachment->contentType) {
-            AttachmentContentType::BASE64 => $attachment->content,
-            AttachmentContentType::URL => throw new ProviderException('Ollama support only base64 attachment type.'),
-        };
-    }
-
     protected function mapToolCall(ToolCallMessage $message): void
     {
-        $message = $message->jsonSerialize();
+        $payload = [
+            'role' => $message->getRole(),
+            'content' => $message->getContent(),
+        ];
 
-        if (\array_key_exists('usage', $message)) {
-            unset($message['usage']);
-        }
-
-        if (\array_key_exists('tool_calls', $message)) {
-            $message['tool_calls'] = \array_map(function (array $toolCall) {
+        if (array_key_exists('tool_calls', $message->jsonSerialize())) {
+            $toolCalls = $message->jsonSerialize()['tool_calls'];
+            $payload['tool_calls'] = array_map(function (array $toolCall): array {
                 if (empty($toolCall['function']['arguments'])) {
-                    $toolCall['function']['arguments'] = new \stdClass();
+                    $toolCall['function']['arguments'] = new stdClass();
                 }
                 return $toolCall;
-            }, $message['tool_calls']);
+            }, $toolCalls);
         }
 
-        unset($message['type']);
-        unset($message['tools']);
-
-        $this->mapping[] = $message;
+        $this->mapping[] = $payload;
     }
 
-    public function mapToolsResult(ToolCallResultMessage $message): void
+    public function mapToolsResult(ToolResultMessage $message): void
     {
         foreach ($message->getTools() as $tool) {
             $this->mapping[] = [

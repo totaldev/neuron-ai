@@ -1,6 +1,6 @@
 {
-    "name": "inspector-apm/neuron-ai",
-    "description": "The AI Agent Development Kit for PHP.",
+    "name": "neuron-core/neuron-ai",
+    "description": "The PHP Agentic Framework.",
     "minimum-stability": "stable",
     "authors": [
         {
@@ -13,44 +13,43 @@
         "php": "^8.1",
         "guzzlehttp/guzzle": "^7.9",
         "inspector-apm/inspector-php": "^3.15.10",
-        "psr/http-message": "^1.0|^2.0",
-        "psr/log": "^1.0|^2.0|^3.0"
+        "psr/http-message": "^1.0|^2.0"
     },
     "suggest": {
         "aws/aws-sdk-php": "^3.209",
         "elasticsearch/elasticsearch": "^7.0|^8.0",
-        "symfony/process": "^4.0|^5.0|^6.0|^7.0",
-        "typesense/typesense-php": "^5.0",
         "php-http/curl-client": "^2.3",
-        "doctrine/orm": "^2.20"
+        "psr/log": "^1.0|^2.0|^3.0",
+        "symfony/process": "^4.0|^5.0|^6.0|^7.0",
+        "spatie/fork": "^1.2",
+        "typesense/typesense-php": "^5.0"
     },
     "require-dev": {
-        "aws/aws-sdk-php": "^3.209",
-        "doctrine/orm": "^2.20",
-        "elasticsearch/elasticsearch": "^8.0",
         "ext-pdo": "*",
+        "aws/aws-sdk-php": "^3.209",
+        "elasticsearch/elasticsearch": "^8.0",
         "friendsofphp/php-cs-fixer": "^3.75",
         "html2text/html2text": "^4.3",
-        "monolog/monolog": "^3.9",
-        "php-http/curl-client": "^2.3",
+        "illuminate/database": "^10.0|^11.0|^12.0",
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^9.0",
         "rector/rector": "^2.0",
-        "symfony/cache": "^5.4 || ^6.4 || ^7.0",
-        "symfony/process": "^5.0|^6.0|^7.0",
-        "typesense/typesense-php": "^5.0",
-        "tomasvotruba/type-coverage": "^2.0"
+        "spatie/fork": "^1.2",
+        "tomasvotruba/type-coverage": "^2.0",
+        "typesense/typesense-php": "^5.0"
     },
     "bin": [
-        "bin/evaluation",
-        "bin/evaluation.bat",
-        "bin/evaluation.ps1"
+        "bin/neuron"
     ],
     "scripts": {
         "analyse": [
             "vendor/bin/phpstan analyse --memory-limit=1G -v"
         ],
         "format": [
+            "php-cs-fixer fix --allow-risky=yes",
+            "vendor/bin/rector"
+        ],
+        "style": [
             "php-cs-fixer fix --allow-risky=yes"
         ],
         "refactor": [
@@ -63,6 +62,7 @@
     "scripts-descriptions": {
         "analyse": "Run PHPStan static analysis against your application.",
         "format": "Run PHP CS Fixer against your application.",
+        "refactor": "Run rector for code refactoring.",
         "test": "Run PHPUnit to test"
     },
     "autoload": {

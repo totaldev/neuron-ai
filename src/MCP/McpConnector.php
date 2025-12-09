@@ -13,6 +13,15 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolInterface;
 use NeuronAI\Tools\ToolProperty;
+use Exception;
+use ReflectionException;
+
+use function array_filter;
+use function array_key_exists;
+use function array_map;
+use function call_user_func;
+use function in_array;
+use function is_array;
 
 /**
  * @method static static make(array<string, mixed> $config)
@@ -64,19 +73,19 @@ class McpConnector
      * Get the list of available Tools from the server.
      *
      * @return ToolInterface[]
-     * @throws \Exception
+     * @throws Exception
      */
     public function tools(): array
     {
         // Filter by the only and exclude preferences.
-        $tools = \array_filter(
+        $tools = array_filter(
             $this->client->listTools(),
             fn (array $tool): bool =>
-                !\in_array($tool['name'], $this->exclude) &&
-                ($this->only === [] || \in_array($tool['name'], $this->only)),
+                !in_array($tool['name'], $this->exclude) &&
+                ($this->only === [] || in_array($tool['name'], $this->only)),
         );
 
-        return \array_map(fn (array $tool): ToolInterface => $this->createTool($tool), $tools);
+        return array_map($this->createTool(...), $tools);
     }
 
     /**
@@ -84,36 +93,36 @@ class McpConnector
      *
      * @param array<string, mixed> $item
      * @throws ArrayPropertyException
-     * @throws \ReflectionException
+     * @throws ReflectionException
      * @throws ToolException
      */
     protected function createTool(array $item): ToolInterface
     {
         $tool = Tool::make(
             name: $item['name'],
-            description: $item['description'] ?? null
+            description: $item['description'] ?? null,
+            annotations: $item['annotations'] ?? [],
         )->setCallable(function (...$arguments) use ($item) {
-            $response = \call_user_func($this->client->callTool(...), $item['name'], $arguments);
+            $response = call_user_func($this->client->callTool(...), $item['name'], $arguments);
 
-            if (\array_key_exists('error', $response)) {
+            if (array_key_exists('error', $response)) {
                 throw new McpException($response['error']['message']);
             }
 
-            $response = $response['result']['content'][0];
-
-            if ($response['type'] === 'text') {
-                return $response['text'];
+            if (array_key_exists('content', $response['result'])) {
+                return $response['result']['content'];
             }
 
-            if ($response['type'] === 'image') {
-                return $response;
-            }
-
-            throw new McpException("Tool response format not supported: {$response['type']}");
+            return "";
         });
 
+        // If the tool has no properties, return early
+        if (!isset($item['inputSchema']['properties']) || !is_array($item['inputSchema']['properties'])) {
+            return $tool;
+        }
+
         foreach ($item['inputSchema']['properties'] as $name => $prop) {
-            $required = \in_array($name, $item['inputSchema']['required'] ?? []);
+            $required = in_array($name, $item['inputSchema']['required'] ?? []);
 
             $type = PropertyType::fromSchema($prop['type'] ?? PropertyType::STRING->value);
 
@@ -139,7 +148,7 @@ class McpConnector
             type: $type,
             description: $prop['description'] ?? null,
             required: $required,
-            enum: $prop['items']['enum'] ?? []
+            enum: $prop['items']['enum'] ?? $prop['enum'] ?? []
         );
     }
 
@@ -164,7 +173,7 @@ class McpConnector
      * @param array<string, mixed> $prop
      * @throws ArrayPropertyException
      * @throws ToolException
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     protected function createObjectProperty(string $name, bool $required, array $prop): ObjectProperty
     {

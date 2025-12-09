@@ -12,6 +12,9 @@ use NeuronAI\Chat\Messages\Usage;
 use NeuronAI\Exceptions\ProviderException;
 use Psr\Http\Message\ResponseInterface;
 
+use function array_unshift;
+use function json_decode;
+
 trait HandleChat
 {
     public function chat(array $messages): Message
@@ -23,7 +26,7 @@ trait HandleChat
     {
         // Include the system prompt
         if (isset($this->system)) {
-            \array_unshift($messages, new Message(MessageRole::SYSTEM, $this->system));
+            array_unshift($messages, new Message(MessageRole::SYSTEM, $this->system));
         }
 
         $json = [
@@ -34,7 +37,7 @@ trait HandleChat
         ];
 
         if (! empty($this->tools)) {
-            $json['tools'] = $this->generateToolsPayload();
+            $json['tools'] = $this->toolPayloadMapper()->map($this->tools);
         }
 
         return $this->client->postAsync('chat', ['json' => $json])
@@ -43,16 +46,16 @@ trait HandleChat
                     throw new ProviderException("Ollama chat error: {$response->getBody()->getContents()}");
                 }
 
-                $response = \json_decode($response->getBody()->getContents(), true);
+                $response = json_decode($response->getBody()->getContents(), true);
                 $message = $response['message'];
 
-                if (\array_key_exists('tool_calls', $message)) {
-                    $message = $this->createToolCallMessage($message);
+                if (isset($message['tool_calls'])) {
+                    $message = $this->createToolCallMessage($message['tool_calls'], $message['content'] ?? null);
                 } else {
                     $message = new AssistantMessage($message['content']);
                 }
 
-                if (\array_key_exists('prompt_eval_count', $response) && \array_key_exists('eval_count', $response)) {
+                if (isset($response['prompt_eval_count']) && isset($response['eval_count'])) {
                     $message->setUsage(
                         new Usage($response['prompt_eval_count'], $response['eval_count'])
                     );

@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-use NeuronAI\Tests\Workflow\AfterInterruptNode;
-use NeuronAI\Tests\Workflow\BeforeInterruptNode;
-use NeuronAI\Tests\Workflow\InterruptNode;
-use NeuronAI\Workflow\Edge;
+use NeuronAI\Tests\Workflow\Stubs\InterruptableNode;
+use NeuronAI\Tests\Workflow\Stubs\NodeForSecond;
+use NeuronAI\Tests\Workflow\Stubs\NodeOne;
 use NeuronAI\Workflow\Persistence\FilePersistence;
 use NeuronAI\Workflow\Workflow;
 use NeuronAI\Workflow\WorkflowInterrupt;
@@ -13,33 +12,29 @@ use NeuronAI\Workflow\WorkflowState;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-
 $persistence = new FilePersistence(__DIR__);
-$workflow = new Workflow($persistence, 'test_workflow');
 
-$workflow->addNodes([
-        new BeforeInterruptNode(),
-        new InterruptNode(),
-        new AfterInterruptNode()
-    ])
-    ->addEdges([
-        new Edge(BeforeInterruptNode::class, InterruptNode::class),
-        new Edge(InterruptNode::class, AfterInterruptNode::class)
-    ])
-    ->setStart(BeforeInterruptNode::class)
-    ->setEnd(AfterInterruptNode::class);
+$workflow = Workflow::make(new WorkflowState(), $persistence, 'test_workflow')
+    ->addNodes([
+        new NodeOne(),
+        new InterruptableNode(),
+        new NodeForSecond(),
+    ]);
+
+// Draw the workflow graph
+echo $workflow->export().\PHP_EOL.\PHP_EOL.\PHP_EOL;
 
 // Run the workflow and catch the interruption
 try {
-    $workflow->run(new WorkflowState(['value' => 8]));
+    $finalState = $workflow->start()->getResult();
 } catch (WorkflowInterrupt $interrupt) {
     // Verify interrupt was saved
     $savedInterrupt = $persistence->load('test_workflow');
-    echo "Workflow interrupted at {$savedInterrupt->getCurrentNode()}.".\PHP_EOL;
+    echo "Workflow interrupted at ".$savedInterrupt->getNode()::class.\PHP_EOL;
 }
 
-// Resume the workflow providing the human feedback
-$result = $workflow->resume(['status' => 'approved']);
+// Resume the workflow providing external data
+$finalState = $workflow->start($savedInterrupt->getRequest())->getResult();
 
-// Print the final value
-echo $result->get('final_value').\PHP_EOL; // It should print 28
+// It should print "approved"
+echo $finalState->get('received_feedback').\PHP_EOL;

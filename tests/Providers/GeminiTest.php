@@ -9,15 +9,17 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
-use NeuronAI\Chat\Attachments\Document;
-use NeuronAI\Chat\Attachments\Image;
-use NeuronAI\Chat\Enums\AttachmentContentType;
+use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\Gemini\Gemini;
 use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 use PHPUnit\Framework\TestCase;
+
+use function json_decode;
 
 class GeminiTest extends TestCase
 {
@@ -67,7 +69,7 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -86,8 +88,9 @@ class GeminiTest extends TestCase
         $provider = (new Gemini('', 'gemini-2.0-flash'))->setClient($client);
 
         $message = (new UserMessage('Describe this image'))
-            ->addAttachment(new Image(
-                image: '/test.png',
+            ->addContent(new ImageContent(
+                content: '/test.png',
+                sourceType: SourceType::URL,
                 mediaType: 'image/png'
             ));
 
@@ -110,7 +113,7 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -129,9 +132,9 @@ class GeminiTest extends TestCase
         $provider = (new Gemini('', 'gemini-2.0-flash'))->setClient($client);
 
         $message = (new UserMessage('Describe this image'))
-            ->addAttachment(new Image(
-                image: 'base64_encoded_image_data',
-                type: AttachmentContentType::BASE64,
+            ->addContent(new ImageContent(
+                content: 'base64_encoded_image_data',
+                sourceType: SourceType::BASE64,
                 mediaType: 'image/png'
             ));
 
@@ -154,7 +157,7 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -173,8 +176,9 @@ class GeminiTest extends TestCase
         $provider = (new Gemini('', 'gemini-2.0-flash'))->setClient($client);
 
         $message = (new UserMessage('Describe this document'))
-            ->addAttachment(new Document(
-                document: '/test.pdf',
+            ->addContent(new FileContent(
+                content: '/test.pdf',
+                sourceType: SourceType::URL,
                 mediaType: 'application/pdf'
             ));
 
@@ -197,7 +201,7 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -216,9 +220,9 @@ class GeminiTest extends TestCase
         $provider = (new Gemini('', 'gemini-2.0-flash'))->setClient($client);
 
         $message = (new UserMessage('Describe this document'))
-            ->addAttachment(new Image(
-                image: 'base64_encoded_document_data',
-                type: AttachmentContentType::BASE64,
+            ->addContent(new ImageContent(
+                content: 'base64_encoded_document_data',
+                sourceType: SourceType::BASE64,
                 mediaType: 'application/pdf'
             ));
 
@@ -241,7 +245,7 @@ class GeminiTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -307,6 +311,6 @@ class GeminiTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 }

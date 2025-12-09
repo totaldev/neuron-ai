@@ -7,6 +7,8 @@ namespace NeuronAI\Tools;
 use NeuronAI\Exceptions\ArrayPropertyException;
 use NeuronAI\StaticConstructor;
 
+use function is_null;
+
 /**
  * @method static static make(string $name, string $description, bool $required = false, ?ToolPropertyInterface $items = null, ?int $minItems = null, ?int $maxItems = null)
  */
@@ -34,9 +36,7 @@ class ArrayProperty implements ToolPropertyInterface
     {
         return [
             'name' => $this->name,
-            'description' => $this->description,
-            'type' => $this->type->value,
-            'items' => $this->getJsonSchema(),
+            ...$this->getJsonSchema(),
             'required' => $this->required,
         ];
     }
@@ -47,12 +47,14 @@ class ArrayProperty implements ToolPropertyInterface
             'type' => $this->type->value,
         ];
 
-        if (!\is_null($this->description)) {
+        if (!is_null($this->description)) {
             $schema['description'] = $this->description;
         }
 
         if ($this->items instanceof ToolPropertyInterface) {
             $schema['items'] = $this->items->getJsonSchema();
+        } else {
+            $schema['items'] = ['type' => 'string'];
         }
 
         if ($this->minItems !== null && $this->minItems !== 0) {

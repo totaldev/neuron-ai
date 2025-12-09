@@ -5,10 +5,24 @@ declare(strict_types=1);
 namespace NeuronAI\Tools\Toolkits\PGSQL;
 
 use InvalidArgumentException;
+use NeuronAI\Exceptions\ArrayPropertyException;
+use NeuronAI\Exceptions\ToolException;
+use NeuronAI\Tools\ArrayProperty;
+use NeuronAI\Tools\ObjectProperty;
 use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 use PDO;
+use ReflectionException;
+
+use function array_filter;
+use function array_map;
+use function explode;
+use function preg_match;
+use function preg_replace;
+use function str_starts_with;
+use function stripos;
+use function trim;
 
 /**
  * @method static static make(PDO $pdo)
@@ -42,25 +56,45 @@ class PGSQLSelectTool extends Tool
     public function __construct(protected PDO $pdo)
     {
         parent::__construct(
-            'execute_select_query',
+            'pgsql_select_query',
             'Use this tool only to run SELECT query against the PostgreSQL database.
 This the tool to use only to gather information from the PostgreSQL database.'
         );
     }
 
+    /**
+     * @throws ReflectionException
+     * @throws ArrayPropertyException
+     * @throws ToolException
+     */
     protected function properties(): array
     {
         return [
             new ToolProperty(
                 'query',
                 PropertyType::STRING,
-                'The SELECT query you want to run against the database.',
+                'The parameterized SELECT query with named placeholders (e.g., "SELECT name, email FROM users WHERE name = :name. Use named parameters (:parameter_name) for all dynamic values.',
                 true
-            )
+            ),
+            new ArrayProperty(
+                'parameters',
+                'Key-value pairs for parameter binding where keys match the named placeholders in the query (without the colon). Example: {"name": "John Doe", "email": "%john%", "id": 123}. Leave empty if no parameters are needed.',
+                false,
+                items: new ObjectProperty(
+                    name: 'parameter',
+                    properties: [
+                        new ToolProperty('name', PropertyType::STRING, 'Parameter name', true),
+                        new ToolProperty('value', PropertyType::STRING, 'Parameter value', true),
+                    ]
+                )
+            ),
         ];
     }
 
-    public function __invoke(string $query): array
+    /**
+     * @param array<array{name: string, value: string}>|null $parameters
+     */
+    public function __invoke(string $query, ?array $parameters = []): array
     {
         if (!$this->validateReadOnlyQuery($query)) {
             return [
@@ -70,6 +104,14 @@ It looks like you are trying to run a write query using the read-only query tool
         }
 
         $statement = $this->pdo->prepare($query);
+
+        // Bind parameters if provided
+        $parameters ??= [];
+        foreach ($parameters as $parameter) {
+            $paramName = str_starts_with((string) $parameter['name'], ':') ? $parameter['name'] : ':' . $parameter['name'];
+            $statement->bindValue($paramName, $parameter['value']);
+        }
+
         $statement->execute();
 
         return $statement->fetchAll(PDO::FETCH_ASSOC);
@@ -89,10 +131,10 @@ It looks like you are trying to run a write query using the read-only query tool
         // Remove comments to avoid false positives
         $cleanQuery = $this->removeComments($query);
 
-        // Check if query starts with an allowed read operation
+        // Check if the query starts with an allowed read operation
         $isAllowed = false;
         foreach ($this->allowedPatterns as $pattern) {
-            if (\preg_match($pattern, $cleanQuery)) {
+            if (preg_match($pattern, $cleanQuery)) {
                 $isAllowed = true;
                 break;
             }
@@ -104,7 +146,7 @@ It looks like you are trying to run a write query using the read-only query tool
 
         // Check for forbidden write operations
         foreach ($this->forbiddenPatterns as $pattern) {
-            if (\preg_match($pattern, $cleanQuery)) {
+            if (preg_match($pattern, $cleanQuery)) {
                 return false;
             }
         }
@@ -116,10 +158,10 @@ It looks like you are trying to run a write query using the read-only query tool
     protected function removeComments(string $query): string
     {
         // Remove single-line comments (-- style)
-        $query = \preg_replace('/--.*$/m', '', $query);
+        $query = preg_replace('/--.*$/m', '', $query);
 
         // Remove multi-line comments (/* */ style)
-        $query = \preg_replace('/\/\*.*?\*\//s', '', (string) $query);
+        $query = preg_replace('/\/\*.*?\*\//s', '', (string) $query);
 
         return $query;
     }
@@ -127,11 +169,11 @@ It looks like you are trying to run a write query using the read-only query tool
     protected function performAdditionalSecurityChecks(string $query): bool
     {
         // Check for semicolon followed by potential write operations
-        if (\preg_match('/;\s*(?!$)/i', $query)) {
+        if (preg_match('/;\s*(?!$)/i', $query)) {
             // Multiple statements detected - need to validate each one
             $statements = $this->splitStatements($query);
             foreach ($statements as $statement) {
-                if (\trim((string) $statement) !== '' && !$this->validateSingleStatement(\trim((string) $statement))) {
+                if (trim((string) $statement) !== '' && !$this->validateSingleStatement(trim((string) $statement))) {
                     return false;
                 }
             }
@@ -149,7 +191,7 @@ It looks like you are trying to run a write query using the read-only query tool
         ];
 
         foreach ($dangerousFunctions as $func) {
-            if (\stripos($query, $func) !== false) {
+            if (stripos($query, $func) !== false) {
                 return false;
             }
         }
@@ -163,8 +205,8 @@ It looks like you are trying to run a write query using the read-only query tool
     protected function splitStatements(string $query): array
     {
         // Simple split on semicolons (this could be enhanced for more complex cases)
-        return \array_filter(
-            \array_map('trim', \explode(';', $query)),
+        return array_filter(
+            array_map(trim(...), explode(';', $query)),
             fn (string $stmt): bool => $stmt !== ''
         );
     }
@@ -178,7 +220,7 @@ It looks like you are trying to run a write query using the read-only query tool
     {
         $isAllowed = false;
         foreach ($this->allowedPatterns as $pattern) {
-            if (\preg_match($pattern, $statement)) {
+            if (preg_match($pattern, $statement)) {
                 $isAllowed = true;
                 break;
             }

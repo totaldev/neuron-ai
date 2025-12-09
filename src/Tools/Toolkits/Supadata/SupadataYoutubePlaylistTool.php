@@ -8,6 +8,11 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 
+use function json_decode;
+
+/**
+ * @method static static make(string $key)
+ */
 class SupadataYoutubePlaylistTool extends Tool
 {
     use HttpClient;
@@ -39,6 +44,6 @@ class SupadataYoutubePlaylistTool extends Tool
             ->getBody()
             ->getContents();
 
-        return \json_decode($response, true);
+        return json_decode($response, true);
     }
 }

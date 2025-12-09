@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace NeuronAI\Providers\Anthropic;
 
 use GuzzleHttp\Client;
-use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Chat\Messages\Citation;
+use NeuronAI\Chat\Messages\ContentBlocks\ContentBlockInterface;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\HasGuzzleClient;
@@ -13,8 +14,14 @@ use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\HandleWithTools;
 use NeuronAI\Providers\HttpClientOptions;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\ToolPayloadMapperInterface;
 use NeuronAI\Tools\ToolInterface;
-use NeuronAI\Tools\ToolPropertyInterface;
+
+use function array_map;
+use function is_array;
+use function mb_strlen;
+use function trim;
+use function uniqid;
 
 class Anthropic implements AIProviderInterface
 {
@@ -35,6 +42,9 @@ class Anthropic implements AIProviderInterface
      */
     protected ?string $system = null;
 
+    protected MessageMapperInterface $messageMapper;
+    protected ToolPayloadMapperInterface $toolPayloadMapper;
+
     /**
      * @param array<string, mixed> $parameters
      */
@@ -47,7 +57,7 @@ class Anthropic implements AIProviderInterface
         protected ?HttpClientOptions $httpOptions = null,
     ) {
         $config = [
-            'base_uri' => \trim($this->baseUri, '/').'/',
+            'base_uri' => trim($this->baseUri, '/').'/',
             'headers' => [
                 'Content-Type' => 'application/json',
                 'x-api-key' => $this->key,
@@ -70,51 +80,67 @@ class Anthropic implements AIProviderInterface
 
     public function messageMapper(): MessageMapperInterface
     {
-        return new MessageMapper();
+        return $this->messageMapper ?? $this->messageMapper = new MessageMapper();
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    protected function generateToolsPayload(): array
+    public function toolPayloadMapper(): ToolPayloadMapperInterface
     {
-        return \array_map(function (ToolInterface $tool): array {
-            $properties = \array_reduce($tool->getProperties(), function (array $carry, ToolPropertyInterface $property): array {
-                $carry[$property->getName()] = $property->getJsonSchema();
-                return $carry;
-            }, []);
-
-            return [
-                'name' => $tool->getName(),
-                'description' => $tool->getDescription(),
-                'input_schema' => [
-                    'type' => 'object',
-                    'properties' => empty($properties) ? null : $properties,
-                    'required' => $tool->getRequiredProperties(),
-                ],
-            ];
-        }, $this->tools);
+        return $this->toolPayloadMapper ?? $this->toolPayloadMapper = new ToolPayloadMapper();
     }
 
     /**
-     * @param array<string, mixed> $message
+     * @param string|ContentBlockInterface[]|null $content
      * @throws ProviderException
      */
-    public function createToolCallMessage(array $message): Message
+    public function createToolCallMessage(array $toolCalls, string|array|null $content = null): ToolCallMessage
     {
-        $tool = $this->findTool($message['name'])
-            ->setInputs($message['input'])
-            ->setCallId($message['id']);
+        $tools = array_map(fn (array $tool): ToolInterface => $this->findTool($tool['name'])
+            ->setInputs($tool['input'])
+            ->setCallId($tool['id']), $toolCalls);
 
-        // During serialization and deserialization PHP convert the original empty object {} to empty array []
-        // causing an error on the Anthropic API. If there are no inputs, we need to restore the empty JSON object.
-        if (empty($message['input'])) {
-            $message['input'] = new \stdClass();
+        return new ToolCallMessage($content, $tools);
+    }
+
+    /**
+     * Extract citations from Anthropic's content blocks.
+     *
+     * @param array<int, array<string, mixed>> $contentBlocks
+     * @return Citation[]
+     */
+    protected function extractCitations(array $contentBlocks): array
+    {
+        $citations = [];
+        $textOffset = 0;
+
+        foreach ($contentBlocks as $index => $block) {
+            $type = $block['type'] ?? null;
+
+            if ($type === 'text') {
+                $text = $block['text'] ?? '';
+                $textLength = mb_strlen($text);
+
+                // Check if this text block has citations metadata
+                if (isset($block['citations']) && is_array($block['citations'])) {
+                    foreach ($block['citations'] as $citation) {
+                        $citations[] = new Citation(
+                            id: $citation['id'] ?? uniqid('anthropic_'),
+                            source: $citation['source'] ?? '',
+                            title: $citation['title'] ?? null,
+                            startIndex: ($citation['start_index'] ?? 0) + $textOffset,
+                            endIndex: ($citation['end_index'] ?? $textLength) + $textOffset,
+                            citedText: $citation['text'] ?? null,
+                            metadata: [
+                                'block_index' => $index,
+                                'provider' => 'anthropic',
+                            ]
+                        );
+                    }
+                }
+
+                $textOffset += $textLength;
+            }
         }
 
-        return new ToolCallMessage(
-            [$message],
-            [$tool] // Anthropic call one tool at a time. So we pass an array with one element.
-        );
+        return $citations;
     }
 }

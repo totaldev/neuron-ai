@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Promise\PromiseInterface;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Tools\ToolInterface;
+use Generator;
 
 interface AIProviderInterface
 {
@@ -29,6 +30,11 @@ interface AIProviderInterface
     public function messageMapper(): MessageMapperInterface;
 
     /**
+     * The component responsible for mapping the NeuronAI Tools to the AI provider format.
+     */
+    public function toolPayloadMapper(): ToolPayloadMapperInterface;
+
+    /**
      * Send a prompt to the AI agent.
      *
      * @param Message[] $messages
@@ -43,9 +49,16 @@ interface AIProviderInterface
     public function chatAsync(array $messages): PromiseInterface;
 
     /**
-     * @param Message[]|string $messages
+     * Stream response from the LLM.
+     *
+     * Yields intermediate chunks (TextChunk, ReasoningChunk, etc.) during streaming
+     * for real-time delivery to the user. The generator MUST return a complete
+     * Message object (AssistantMessage or ToolCallMessage) as its final value.
+     *
+     * @param Message[] $messages
+     * @return Generator<int, \NeuronAI\Chat\Messages\Stream\Chunks\TextChunk|\NeuronAI\Chat\Messages\Stream\Chunks\ReasoningChunk|\NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk|array, mixed, Message>
      */
-    public function stream(array|string $messages, callable $executeToolsCallback): \Generator;
+    public function stream(array|string $messages): Generator;
 
     /**
      * @param Message[] $messages

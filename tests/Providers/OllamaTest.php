@@ -9,8 +9,8 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
-use NeuronAI\Chat\Attachments\Image;
-use NeuronAI\Chat\Enums\AttachmentContentType;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\Ollama\Ollama;
@@ -18,6 +18,8 @@ use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 use PHPUnit\Framework\TestCase;
+
+use function json_decode;
 
 class OllamaTest extends TestCase
 {
@@ -58,7 +60,7 @@ class OllamaTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -80,7 +82,7 @@ class OllamaTest extends TestCase
         ))->setClient($client);
 
         $message = (new UserMessage('Describe this image'))
-            ->addAttachment(new Image('base_64_encoded_image', AttachmentContentType::BASE64));
+            ->addContent(new ImageContent(content: 'base_64_encoded_image', sourceType: SourceType::BASE64));
 
         $response = $provider->chat([$message]);
 
@@ -101,7 +103,7 @@ class OllamaTest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -123,7 +125,7 @@ class OllamaTest extends TestCase
         ))->setClient($client);
 
         $message = (new UserMessage('Describe this image'))
-            ->addAttachment(new Image('base_64_encoded_image'));
+            ->addContent(new ImageContent(content: 'base_64_encoded_image', sourceType: SourceType::URL));
 
         $this->expectException(ProviderException::class);
         $provider->chat([$message]);
@@ -193,6 +195,6 @@ class OllamaTest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 }

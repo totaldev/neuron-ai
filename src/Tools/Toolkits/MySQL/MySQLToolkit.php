@@ -8,7 +8,7 @@ use NeuronAI\Tools\Toolkits\AbstractToolkit;
 use PDO;
 
 /**
- * @method static make(PDO $pdo)
+ * @method static static make(PDO $pdo)
  */
 class MySQLToolkit extends AbstractToolkit
 {
@@ -20,7 +20,7 @@ class MySQLToolkit extends AbstractToolkit
     {
         return "These tools allow you to learn the database structure,
         getting detailed information about tables, columns, relationships, and constraints
-        to generate and execute precise and efficient SQL queries.";
+        to generate and execute precise and efficient SQL queries for MySQL database.";
     }
 
     public function provide(): array

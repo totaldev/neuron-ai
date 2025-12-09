@@ -8,9 +8,6 @@ use NeuronAI\RAG\Embeddings\EmbeddingsProviderInterface;
 
 trait ResolveEmbeddingProvider
 {
-    /**
-     * The embeddings provider of the RAG system.
-     */
     protected EmbeddingsProviderInterface $embeddingsProvider;
 
     public function setEmbeddingsProvider(EmbeddingsProviderInterface $provider): RAG
@@ -26,9 +23,6 @@ trait ResolveEmbeddingProvider
 
     public function resolveEmbeddingsProvider(): EmbeddingsProviderInterface
     {
-        if (!isset($this->embeddingsProvider)) {
-            $this->embeddingsProvider = $this->embeddings();
-        }
-        return $this->embeddingsProvider;
+        return $this->embeddingsProvider ?? $this->embeddingsProvider = $this->embeddings();
     }
 }

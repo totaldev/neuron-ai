@@ -5,294 +5,186 @@ declare(strict_types=1);
 namespace NeuronAI\Tests\Workflow;
 
 use NeuronAI\Exceptions\WorkflowException;
-use NeuronAI\Workflow\Edge;
-use NeuronAI\Workflow\Exporter\ExporterInterface;
+use NeuronAI\Workflow\Persistence\InMemoryPersistence;
+use NeuronAI\Workflow\Events\StartEvent;
 use NeuronAI\Workflow\Workflow;
+use NeuronAI\Workflow\WorkflowInterrupt;
 use NeuronAI\Workflow\WorkflowState;
 use PHPUnit\Framework\TestCase;
+use NeuronAI\Tests\Workflow\Stubs\ConditionalNode;
+use NeuronAI\Tests\Workflow\Stubs\FirstEvent;
+use NeuronAI\Tests\Workflow\Stubs\InterruptableNode;
+use NeuronAI\Tests\Workflow\Stubs\NodeForSecond;
+use NeuronAI\Tests\Workflow\Stubs\NodeForThird;
+use NeuronAI\Tests\Workflow\Stubs\NodeOne;
+use NeuronAI\Tests\Workflow\Stubs\NodeThree;
+use NeuronAI\Tests\Workflow\Stubs\NodeTwo;
 
 class WorkflowTest extends TestCase
 {
-    public function test_basic_workflow(): void
+    public function testBasicLinearWorkflowExecution(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
+        $workflow = Workflow::make()
+            ->addNodes([
+                new NodeOne(),
+                new NodeTwo(),
+                 new NodeThree(),
+            ]);
 
-        $result = $workflow->run();
+        $finalState = $workflow->start()->getResult();
 
-        $this->assertEquals('end', $result->get('step'));
+        $this->assertTrue($finalState->get('node_one_executed'));
+        $this->assertTrue($finalState->get('node_two_executed'));
+        $this->assertTrue($finalState->get('node_three_executed'));
+        $this->assertEquals('First complete', $finalState->get('first_message'));
+        $this->assertEquals('Second complete', $finalState->get('second_message'));
     }
 
-    public function test_workflow_initial_state(): void
+    public function testWorkflowWithInitialState(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
+        $workflow = Workflow::make(new WorkflowState(['initial_data' => 'test']))
+            ->addNodes([
+                new NodeOne(),
+                new NodeTwo(),
+                 new NodeThree(),
+            ]);
 
-        $initialState = new WorkflowState();
-        $initialState->set('initial_value', 'test');
+        $finalState = $workflow->start()->getResult();
 
-        $result = $workflow->run($initialState);
-
-        $this->assertEquals('test', $result->get('initial_value'));
-        $this->assertEquals('end', $result->get('step'));
+        $this->assertEquals('test', $finalState->get('initial_data'));
+        $this->assertTrue($finalState->get('node_one_executed'));
     }
 
-    public function test_workflow_multiple_nodes(): void
+    public function testNodeClassStringInstantiation(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new MiddleNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, MiddleNode::class))
-            ->addEdge(new Edge(MiddleNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
+        $workflow = Workflow::make()
+            ->addNodes([
+                new NodeOne(),
+                new NodeTwo(),
+                 new NodeThree(),
+            ]);
 
-        $result = $workflow->run();
+        $finalState = $workflow->start()->getResult();
 
-        $this->assertEquals('end', $result->get('step'));
-        $this->assertEquals(1, $result->get('counter'));
+        $this->assertTrue($finalState->get('node_one_executed'));
+        $this->assertTrue($finalState->get('node_two_executed'));
+        $this->assertTrue($finalState->get('node_three_executed'));
     }
 
-    public function testWorkflowWithConditionalEdges(): void
+    public function testEventNodeMapBuilding(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNodes([
-                new StartNode(),
-                new MiddleNode(),
-                new ConditionalNode(),
-                new FinishNode(),
-            ])
-            ->addEdges([
-                new Edge(StartNode::class, MiddleNode::class),
-                new Edge(MiddleNode::class, ConditionalNode::class),
-                new Edge(
-                    ConditionalNode::class,
-                    MiddleNode::class,
-                    fn (WorkflowState $state): mixed => $state->get('should_loop', false)
-                ),
-                new Edge(
-                    ConditionalNode::class,
-                    FinishNode::class,
-                    fn (WorkflowState $state): bool => !$state->get('should_loop', false)
-                )
-            ])
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
+        $workflow = Workflow::make()
+            ->addNodes([
+                new NodeOne(),
+                new NodeTwo(),
+                new NodeThree(),
+            ]);
 
-        $result = $workflow->run();
+        $workflow->start()->getResult();
+        $eventNodeMap = $workflow->getEventNodeMap();
 
-        $this->assertEquals('end', $result->get('step'));
-        $this->assertEquals(3, $result->get('counter'));
-        $this->assertFalse($result->get('should_loop'));
+        $this->assertArrayHasKey(StartEvent::class, $eventNodeMap);
+        $this->assertArrayHasKey(FirstEvent::class, $eventNodeMap);
     }
 
-    public function test_validation_throws_exception_when_start_node_not_set(): void
+    public function testConditionalNodeWithUnionReturnType(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setEnd(FinishNode::class);
+        $nodes = [
+            new NodeOne(),
+            new ConditionalNode(),
+            new NodeForSecond(),
+            new NodeForThird(),
+        ];
 
+        $workflow = Workflow::make(new WorkflowState(['condition' => 'second']))
+            ->addNodes($nodes);
+
+        $finalState = $workflow->start()->getResult();
+
+        $this->assertTrue($finalState->get('conditional_node_executed'));
+        $this->assertTrue($finalState->get('second_path_executed'));
+        $this->assertFalse($finalState->has('third_path_executed'));
+        $this->assertEquals('Conditional chose second', $finalState->get('final_second_message'));
+
+        // Test the third path
+        $workflow = Workflow::make(new WorkflowState(['condition' => 'third']))
+            ->addNodes($nodes);
+        $finalState = $workflow->start()->getResult();
+
+        $this->assertTrue($finalState->get('conditional_node_executed'));
+        $this->assertTrue($finalState->get('third_path_executed'));
+        $this->assertFalse($finalState->has('second_path_executed'));
+        $this->assertEquals('Conditional chose third', $finalState->get('final_third_message'));
+    }
+
+    public function testWorkflowValidationFailsWithNoStartNode(): void
+    {
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage('Start node must be defined');
+        $this->expectExceptionMessage('No nodes found that handle '.StartEvent::class);
 
-        $workflow->run();
+        $workflow = Workflow::make()
+            ->addNodes([
+                new NodeTwo(),
+                 new NodeThree(),
+            ]);
+
+        $workflow->start()->getResult();
     }
 
-    public function test_validation_throws_exception_when_end_node_not_set(): void
+    public function testWorkflowFailsWhenNoNodeHandlesEvent(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(StartNode::class);
-
         $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage('End node must be defined');
+        $this->expectExceptionMessage('No node found that handle event');
 
-        $workflow->run();
+        $workflow = Workflow::make()
+            ->addNodes([
+                new NodeOne(),
+                // Missing NodeTwo that handles FirstEvent
+                new NodeThree(),
+            ]);
+
+        $workflow->start()->getResult();
     }
 
-    public function test_validation_throws_exception_when_start_node_does_not_exist(): void
+    public function testWorkflowInterrupt(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
+        $this->expectException(WorkflowInterrupt::class);
 
-        $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("Start node ".StartNode::class." does not exist");
+        $workflow = Workflow::make(
+            persistence: new InMemoryPersistence(),
+            workflowId: 'test-workflow'
+        )->addNodes([
+            new NodeOne(),
+            new InterruptableNode(),
+             new NodeThree(),
+        ]);
 
-        $workflow->run();
+        $workflow->start()->getResult();
     }
 
-    public function test_validation_throws_exception_when_end_node_does_not_exist(): void
+    public function testWorkflowResume(): void
     {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
+        $workflow = Workflow::make(
+            persistence: new InMemoryPersistence(),
+            workflowId: 'test-workflow'
+        )->addNodes([
+            new NodeOne(),
+            new InterruptableNode(),
+             new NodeThree(),
+        ]);
 
-        $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("End node ".FinishNode::class." does not exist");
+        try {
+            $workflow->start()->getResult();
+            $this->fail('Expected WorkflowInterrupt exception');
+        } catch (WorkflowInterrupt $interrupt) {
+            $this->assertEquals('human input needed', $interrupt->getRequest()->getMessage());
+            $this->assertInstanceOf(InterruptableNode::class, $interrupt->getNode());
+        }
 
-        $workflow->run();
-    }
+        // Resume with human feedback
+        $finalState = $workflow->start($interrupt->getRequest())->getResult();
 
-    public function test_validation_throws_exception_when_edge_from_node_does_not_exist(): void
-    {
-        $workflow = new Workflow();
-        $workflow->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(FinishNode::class)
-            ->setEnd(FinishNode::class);
-
-        $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("Edge from node ".StartNode::class." does not exist");
-
-        $workflow->run();
-    }
-
-    public function test_validation_throws_exception_when_edge_to_node_does_not_exist(): void
-    {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addEdge(new Edge(StartNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(StartNode::class);
-
-        $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("Edge to node ".FinishNode::class." does not exist");
-
-        $workflow->run();
-    }
-
-    public function test_execution_throws_exception_when_no_valid_edge_found(): void
-    {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(
-                StartNode::class,
-                FinishNode::class,
-                fn (WorkflowState $state): bool => false
-            ))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
-
-        $this->expectException(WorkflowException::class);
-        $this->expectExceptionMessage("No valid edge found from node ".StartNode::class);
-
-        $workflow->run();
-    }
-
-    public function testMermaidExport(): void
-    {
-        $workflow = new Workflow();
-        $workflow->addNode(new StartNode())
-            ->addNode(new MiddleNode())
-            ->addNode(new FinishNode())
-            ->addEdge(new Edge(StartNode::class, MiddleNode::class))
-            ->addEdge(new Edge(MiddleNode::class, FinishNode::class))
-            ->setStart(StartNode::class)
-            ->setEnd(FinishNode::class);
-
-        $mermaid = $workflow->export();
-
-        $this->assertStringContainsString('graph TD', $mermaid);
-        $this->assertStringContainsString('StartNode --> MiddleNode', $mermaid);
-        $this->assertStringContainsString('MiddleNode --> FinishNode', $mermaid);
-    }
-
-    public function test_custom_exporter(): void
-    {
-        $customExporter = new class () implements ExporterInterface {
-            public function export(Workflow $graph): string
-            {
-                return 'custom export';
-            }
-        };
-
-        $workflow = new Workflow();
-        $workflow->setExporter($customExporter);
-        $result = $workflow->export();
-
-        $this->assertEquals('custom export', $result);
-    }
-
-    public function test_workflow_state_data_management(): void
-    {
-        $state = new WorkflowState();
-
-        $state->set('key1', 'value1');
-        $state->set('key2', 42);
-
-        $this->assertEquals('value1', $state->get('key1'));
-        $this->assertEquals(42, $state->get('key2'));
-        $this->assertEquals('default', $state->get('nonexistent', 'default'));
-        $this->assertTrue($state->has('key1'));
-        $this->assertFalse($state->has('nonexistent'));
-
-        $all = $state->all();
-        $this->assertEquals(['key1' => 'value1', 'key2' => 42], $all);
-    }
-
-    public function test_edge_condition_evaluation(): void
-    {
-        $state = new WorkflowState();
-        $state->set('test_value', true);
-
-        $edge = new Edge(
-            StartNode::class,
-            FinishNode::class,
-            fn (WorkflowState $s): mixed => $s->get('test_value', false)
-        );
-
-        $this->assertTrue($edge->shouldExecute($state));
-
-        $state->set('test_value', false);
-        $this->assertFalse($edge->shouldExecute($state));
-    }
-
-    public function test_edge_without_condition(): void
-    {
-        $state = new WorkflowState();
-        $edge = new Edge(StartNode::class, FinishNode::class);
-
-        $this->assertTrue($edge->shouldExecute($state));
-    }
-
-    public function test_get_edges_and_nodes(): void
-    {
-        $workflow = new Workflow();
-        $startNode = new StartNode();
-        $endNode = new FinishNode();
-        $edge = new Edge(StartNode::class, FinishNode::class);
-
-        $workflow->addNode($startNode)
-            ->addNode($endNode)
-            ->addEdge($edge);
-
-        $edges = $workflow->getEdges();
-        $nodes = $workflow->getNodes();
-
-        $this->assertCount(1, $edges);
-        $this->assertSame($edge, $edges[0]);
-
-        $this->assertCount(2, $nodes);
-        $this->assertSame($startNode, $nodes[StartNode::class]);
-        $this->assertSame($endNode, $nodes[FinishNode::class]);
+        $this->assertTrue($finalState->get('interruptable_node_executed'));
+        $this->assertEquals('human input needed', $finalState->get('received_feedback'));
     }
 }

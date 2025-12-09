@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronAI\Tools\Toolkits;
 
 use NeuronAI\Tools\ToolInterface;
+use Closure;
 
 interface ToolkitInterface
 {
@@ -24,5 +25,10 @@ interface ToolkitInterface
      * @param  class-string[]  $classes
      */
     public function only(array $classes): ToolkitInterface;
+
+    /**
+     * @param class-string $class
+     */
+    public function with(string $class, Closure $callback): ToolkitInterface;
 
 }

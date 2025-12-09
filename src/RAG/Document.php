@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronAI\RAG;
 
+use NeuronAI\UniqueIdGenerator;
 use JsonSerializable;
 
 class Document implements JsonSerializable
@@ -26,7 +27,9 @@ class Document implements JsonSerializable
 
     public function __construct(
         public string $content = '',
-    ) {}
+    ) {
+        $this->id = UniqueIdGenerator::generateId();
+    }
 
     public function addMetadata(string $key, string|int $value): Document
     {

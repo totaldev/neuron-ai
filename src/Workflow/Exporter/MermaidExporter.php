@@ -4,20 +4,65 @@ declare(strict_types=1);
 
 namespace NeuronAI\Workflow\Exporter;
 
-use NeuronAI\Workflow\Workflow;
+use NeuronAI\Workflow\NodeInterface;
 use ReflectionClass;
+use ReflectionException;
+use ReflectionNamedType;
+use ReflectionUnionType;
+
+use function in_array;
 
 class MermaidExporter implements ExporterInterface
 {
-    public function export(Workflow $graph): string
+    /**
+     * @param array<string, NodeInterface> $eventNodeMap
+     * @throws ReflectionException
+     */
+    public function export(array $eventNodeMap): string
     {
         $output = "graph TD\n";
+        $processedConnections = [];
 
-        foreach ($graph->getEdges() as $edge) {
-            $from = $this->getShortClassName($edge->getFrom());
-            $to = $this->getShortClassName($edge->getTo());
+        foreach ($eventNodeMap as $eventClass => $node) {
+            $eventName = $this->getShortClassName($eventClass);
+            $nodeName = $this->getShortClassName($node::class);
 
-            $output .= "    {$from} --> {$to}\n";
+            // Add connection from event to node
+            $connection = "{$eventName} --> {$nodeName}";
+            if (!in_array($connection, $processedConnections)) {
+                $output .= "    {$connection}\n";
+                $processedConnections[] = $connection;
+            }
+
+            // Try to determine what event this node produces by looking at return type
+            $reflection = new ReflectionClass($node);
+            $runMethod = $reflection->getMethod('__invoke');
+            $returnType = $runMethod->getReturnType();
+
+            if ($returnType) {
+                $returnEventClasses = [];
+
+                if ($returnType instanceof ReflectionNamedType && !$returnType->isBuiltin()) {
+                    $returnEventClasses[] = $returnType->getName();
+                } elseif ($returnType instanceof ReflectionUnionType) {
+                    foreach ($returnType->getTypes() as $type) {
+                        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+                            $returnEventClasses[] = $type->getName();
+                        }
+                    }
+                }
+
+                foreach ($returnEventClasses as $returnEventClass) {
+                    $returnEventName = $this->getShortClassName($returnEventClass);
+
+                    // Add connection from node to produced event
+                    $connection = "{$nodeName} --> {$returnEventName}";
+                    if (!in_array($connection, $processedConnections)) {
+                        $output .= "    {$connection}\n";
+                        $processedConnections[] = $connection;
+                    }
+                }
+            }
         }
 
         return $output;

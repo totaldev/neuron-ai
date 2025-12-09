@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace NeuronAI\RAG;
 
+use NeuronAI\RAG\VectorStore\MemoryVectorStore;
 use NeuronAI\RAG\VectorStore\VectorStoreInterface;
 
 trait ResolveVectorStore
 {
-    /**
-     * The vector store of the RAG system.
-     */
     protected VectorStoreInterface $store;
 
     public function setVectorStore(VectorStoreInterface $store): RAG
@@ -21,14 +19,11 @@ trait ResolveVectorStore
 
     protected function vectorStore(): VectorStoreInterface
     {
-        return $this->store;
+        return new MemoryVectorStore();
     }
 
     public function resolveVectorStore(): VectorStoreInterface
     {
-        if (!isset($this->store)) {
-            $this->store = $this->vectorStore();
-        }
-        return $this->store;
+        return $this->store ?? $this->store = $this->vectorStore();
     }
 }

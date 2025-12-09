@@ -9,19 +9,24 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
-use NeuronAI\Chat\Attachments\Document;
-use NeuronAI\Chat\Attachments\Image;
-use NeuronAI\Chat\Enums\AttachmentContentType;
+use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Enums\SourceType;
+use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\OpenAI\OpenAI;
-use NeuronAI\Tests\Stubs\Color;
+use NeuronAI\Tests\Stubs\StructuredOutput\Color;
 use NeuronAI\Tools\ArrayProperty;
 use NeuronAI\Tools\ObjectProperty;
 use NeuronAI\Tools\PropertyType;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolProperty;
 use PHPUnit\Framework\TestCase;
+
+use function count;
+use function json_decode;
 
 class OpenAITest extends TestCase
 {
@@ -53,12 +58,17 @@ class OpenAITest extends TestCase
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => 'Hi',
+                    'content' => [
+                        [
+                            'type' => 'text',
+                            'text' => 'Hi',
+                        ]
+                    ],
                 ],
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -77,7 +87,7 @@ class OpenAITest extends TestCase
         $provider = (new OpenAI('', 'gpt-4o'))->setClient($client);
 
         $message = (new UserMessage('Describe this image'))
-            ->addAttachment(new Image('https://example.com/image.png'));
+            ->addContent(new ImageContent(content: 'https://example.com/image.png', sourceType: SourceType::URL));
 
         $response = $provider->chat([$message]);
 
@@ -99,7 +109,7 @@ class OpenAITest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -118,7 +128,7 @@ class OpenAITest extends TestCase
         $provider = (new OpenAI('', 'gpt-4o'))->setClient($client);
 
         $message = (new UserMessage('Describe this image'))
-            ->addAttachment(new Image('base_64_encoded_image', AttachmentContentType::BASE64, 'image/jpeg'));
+            ->addContent(new ImageContent(content: 'base_64_encoded_image', sourceType: SourceType::BASE64, mediaType: 'image/jpeg'));
 
         $response = $provider->chat([$message]);
 
@@ -140,7 +150,7 @@ class OpenAITest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -159,7 +169,7 @@ class OpenAITest extends TestCase
         $provider = (new OpenAI('', 'gpt-4o'))->setClient($client);
 
         $message = (new UserMessage('Describe this document'))
-            ->addAttachment(new Document('https://example.com/document.pdf'));
+            ->addContent(new FileContent(content: 'https://example.com/document.pdf', sourceType: SourceType::URL));
 
         $this->expectException(ProviderException::class);
         $provider->chat([$message]);
@@ -180,7 +190,7 @@ class OpenAITest extends TestCase
         $provider = (new OpenAI('', 'gpt-4o'))->setClient($client);
 
         $message = (new UserMessage('Describe this document'))
-            ->addAttachment(new Image('base_64_encoded_document', AttachmentContentType::BASE64, 'application/pdf'));
+            ->addContent(new ImageContent(content: 'base_64_encoded_document', sourceType: SourceType::BASE64, mediaType: 'application/pdf'));
 
         $response = $provider->chat([$message]);
 
@@ -202,7 +212,7 @@ class OpenAITest extends TestCase
             ],
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
         $this->assertSame('test response', $response->getContent());
     }
 
@@ -244,7 +254,9 @@ class OpenAITest extends TestCase
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => 'Hi',
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Hi'],
+                    ],
                 ],
             ],
             'tools' => [
@@ -268,7 +280,7 @@ class OpenAITest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
     }
 
     public function test_tools_payload_with_array_properties(): void
@@ -313,7 +325,9 @@ class OpenAITest extends TestCase
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => 'Hi',
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Hi'],
+                    ],
                 ],
             ],
             'tools' => [
@@ -341,8 +355,78 @@ class OpenAITest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
     }
+
+    public function test_tools_payload_with_array_properties_no_items(): void
+    {
+        $sentRequests = [];
+        $history = Middleware::history($sentRequests);
+        $mockHandler = new MockHandler([
+            new Response(status: 200, body: $this->body),
+        ]);
+        $stack = HandlerStack::create($mockHandler);
+        $stack->push($history);
+
+        $client = new Client(['handler' => $stack]);
+
+        $provider = (new OpenAI('', 'gpt-4o'))
+            ->setTools([
+                Tool::make('tool', 'description')
+                    ->addProperty(
+                        new ArrayProperty(
+                            'array_prop',
+                            'description',
+                            false
+                        )
+                    )
+            ])
+            ->setClient($client);
+
+        $provider->chat([new UserMessage('Hi')]);
+
+        // Ensure we sent one request
+        $this->assertCount(1, $sentRequests);
+        $request = $sentRequests[0];
+
+        // Ensure we have sent the expected request payload.
+        $expectedRequest = [
+            'model' => 'gpt-4o',
+            'messages' => [
+                [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Hi'],
+                    ],
+                ],
+            ],
+            'tools' => [
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'tool',
+                        'description' => 'description',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'array_prop' => [
+                                    'type' => 'array',
+                                    'description' => 'description',
+                                    'items' => [
+                                        'type' => 'string',
+                                    ]
+                                ]
+                            ],
+                            'required' => [],
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
+    }
+
 
     public function test_tools_payload_with_array_object_mapped(): void
     {
@@ -387,7 +471,9 @@ class OpenAITest extends TestCase
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => 'Hi',
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Hi'],
+                    ],
                 ],
             ],
             'tools' => [
@@ -430,6 +516,52 @@ class OpenAITest extends TestCase
             ]
         ];
 
-        $this->assertSame($expectedRequest, \json_decode((string) $request['request']->getBody()->getContents(), true));
+        $this->assertSame($expectedRequest, json_decode((string) $request['request']->getBody()->getContents(), true));
+    }
+
+    public function test_stream_returns_message_with_text_chunks(): void
+    {
+        // Mock SSE streaming response from OpenAI
+        $streamBody = "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\n";
+        $streamBody .= "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n";
+        $streamBody .= "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" there\"},\"finish_reason\":null}]}\n\n";
+        $streamBody .= "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"!\"},\"finish_reason\":\"stop\"}]}\n\n";
+        $streamBody .= "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":3}}\n\n";
+        $streamBody .= "data: [DONE]\n\n";
+
+        $mockHandler = new MockHandler([
+            new Response(status: 200, body: $streamBody),
+        ]);
+        $stack = HandlerStack::create($mockHandler);
+        $client = new Client(['handler' => $stack]);
+
+        $provider = (new OpenAI('', 'gpt-4o'))->setClient($client);
+
+        $generator = $provider->stream([new UserMessage('Hi')]);
+
+        $chunks = [];
+        foreach ($generator as $chunk) {
+            $chunks[] = $chunk;
+        }
+
+        // Get the final message from generator return value
+        $message = $generator->getReturn();
+
+        // Assert we received TextChunk instances (empty strings filtered out)
+        $this->assertGreaterThanOrEqual(3, count($chunks));
+        foreach ($chunks as $chunk) {
+            $this->assertInstanceOf(TextChunk::class, $chunk);
+        }
+
+        // Verify chunk contents
+        $this->assertSame('Hello', $chunks[0]->content);
+        $this->assertSame(' there', $chunks[1]->content);
+        $this->assertSame('!', $chunks[2]->content);
+
+        // Assert the final message is correct
+        $this->assertInstanceOf(AssistantMessage::class, $message);
+        $this->assertSame('Hello there!', $message->getContent());
+        $this->assertSame(8, $message->getUsage()->inputTokens);
+        $this->assertSame(3, $message->getUsage()->outputTokens);
     }
 }

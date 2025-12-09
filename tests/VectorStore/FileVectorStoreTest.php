@@ -8,6 +8,11 @@ use NeuronAI\RAG\Document;
 use NeuronAI\RAG\VectorStore\FileVectorStore;
 use PHPUnit\Framework\TestCase;
 
+use function unlink;
+use function rmdir;
+use function sys_get_temp_dir;
+use function uniqid;
+
 class FileVectorStoreTest extends TestCase
 {
     public function test_store_documents(): void
@@ -38,7 +43,7 @@ class FileVectorStoreTest extends TestCase
         $this->assertEquals($document->sourceName, $results[0]->getSourceName());
         $this->assertEquals($document->metadata, $results[0]->metadata);
 
-        \unlink(__DIR__.'/neuron.store');
+        unlink(__DIR__.'/neuron.store');
         $this->assertFileDoesNotExist(__DIR__.'/neuron.store');
     }
 
@@ -58,8 +63,25 @@ class FileVectorStoreTest extends TestCase
         $results = $store->similaritySearch([1, 2, 3]);
         $this->assertCount(0, $results);
 
-        \unlink(__DIR__.'/neuron.store');
+        unlink(__DIR__.'/neuron.store');
         $this->assertFileDoesNotExist(__DIR__.'/neuron.store');
         $this->assertFileDoesNotExist(__DIR__.'/neuron_tmp.store');
+    }
+
+    public function test_creates_directory_if_not_exists(): void
+    {
+        $testDir = sys_get_temp_dir() . '/neuron_test_' . uniqid();
+
+        // Ensure directory doesn't exist
+        $this->assertDirectoryDoesNotExist($testDir);
+
+        // Create store with non-existent directory
+        new FileVectorStore($testDir);
+
+        // Verify directory was created
+        $this->assertDirectoryExists($testDir);
+
+        // Cleanup
+        rmdir($testDir);
     }
 }

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronAI\Workflow;
 
+use function array_flip;
+use function array_intersect_key;
+use function array_key_exists;
+
 class WorkflowState
 {
     public function __construct(protected array $data = [])
@@ -22,7 +26,12 @@ class WorkflowState
 
     public function has(string $key): bool
     {
-        return \array_key_exists($key, $this->data);
+        return array_key_exists($key, $this->data);
+    }
+
+    public function delete(string $key): void
+    {
+        unset($this->data[$key]);
     }
 
     /**
@@ -32,7 +41,7 @@ class WorkflowState
      */
     public function only(array $keys): array
     {
-        return \array_intersect_key($this->data, \array_flip($keys));
+        return array_intersect_key($this->data, array_flip($keys));
     }
 
     public function all(): array
