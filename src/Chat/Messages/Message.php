@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace NeuronAI\Chat\Messages;
 
+use NeuronAI\Chat\Attachments\Attachment;
 use NeuronAI\Chat\Messages\ContentBlocks\ContentBlockInterface;
 use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\StaticConstructor;
-use JsonSerializable;
 
 use function array_map;
 use function array_merge;
@@ -18,7 +18,7 @@ use function is_string;
 /**
  * @method static static make(MessageRole $role, string|ContentBlockInterface|ContentBlockInterface[]|null $content = null)
  */
-class Message implements JsonSerializable
+class Message implements \JsonSerializable
 {
     use StaticConstructor;
 
@@ -148,10 +148,14 @@ class Message implements JsonSerializable
             'content' => array_map(fn (ContentBlockInterface $block): array => $block->toArray(), $this->contents)
         ];
 
-        if ($this->getUsage() instanceof Usage) {
+        if ($this->getUsage() instanceof \NeuronAI\Chat\Messages\Usage) {
             $data['usage'] = $this->getUsage()->jsonSerialize();
         }
 
-        return array_merge($this->meta, $data);
+        if ($this->getAttachments() !== []) {
+            $data['attachments'] = \array_map(fn (Attachment $attachment): array => $attachment->jsonSerialize(), $this->getAttachments());
+        }
+
+        return \array_merge($this->meta, $data);
     }
 }
