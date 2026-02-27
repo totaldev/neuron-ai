@@ -17,6 +17,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\SanitizeTrait;
 use NeuronAI\Tools\ToolInterface;
 
 use function array_map;
@@ -27,8 +28,13 @@ use function array_merge;
 
 class MessageMapper implements MessageMapperInterface
 {
+    use SanitizeTrait;
+
     protected array $mapping = [];
 
+    /**
+     * @throws ProviderException
+     */
     public function map(array $messages): array
     {
         $this->mapping = [];
@@ -74,7 +80,7 @@ class MessageMapper implements MessageMapperInterface
         return match ($block::class) {
             TextContent::class => [
                 'type' => 'text',
-                'text' => $block->content,
+                'text' => $this->sanitizeString($block->content),
             ],
             ImageContent::class => $this->mapImageBlock($block),
             FileContent::class => $this->mapFileBlock($block),
@@ -85,8 +91,8 @@ class MessageMapper implements MessageMapperInterface
     protected function mapImageBlock(ImageContent $block): array
     {
         $url = match ($block->sourceType) {
-            SourceType::URL => $block->content,
-            SourceType::BASE64 => 'data:'.$block->mediaType.';base64,'.$block->content,
+            SourceType::URL => $this->sanitizeString($block->content),
+            SourceType::BASE64 => 'data:'.$this->sanitizeString($block->mediaType).';base64,'.$this->sanitizeString($block->content),
         };
 
         return [
@@ -106,24 +112,26 @@ class MessageMapper implements MessageMapperInterface
         return [
             'type' => 'file',
             'file' => [
-                'filename' => $block->filename,
-                'file_data' => "data:{$block->mediaType};base64,{$block->content}",
+                'filename' => $this->sanitizeString($block->filename),
+                'file_data' => "data:{$this->sanitizeString($block->mediaType)};base64,{$this->sanitizeString($block->content)}",
             ]
         ];
     }
 
     protected function mapToolCall(ToolCallMessage $message): array
     {
+        $toolCalls = array_map(fn (ToolInterface $tool): array => [
+            'id' => $this->sanitizeString($tool->getCallId()),
+            'type' => 'function',
+            'function' => [
+                'name' => $this->sanitizeString($tool->getName()),
+                ...($tool->getInputs() === [] ? [] : ['arguments' => json_encode($this->sanitizeForJson($tool->getInputs()))]),
+            ],
+        ], $message->getTools());
+
         $item = [
             'role' => MessageRole::ASSISTANT,
-            'tool_calls' => array_map(fn (ToolInterface $tool): array => [
-                'id' => $tool->getCallId(),
-                'type' => 'function',
-                'function' => [
-                    'name' => $tool->getName(),
-                    ...($tool->getInputs() === [] ? [] : ['arguments' => json_encode($tool->getInputs())]),
-                ],
-            ], $message->getTools())
+            'tool_calls' => $toolCalls,
         ];
 
         $content = $this->mapBlocks($message->getContentBlocks());
@@ -138,8 +146,8 @@ class MessageMapper implements MessageMapperInterface
     {
         return array_map(fn (ToolInterface $tool): array => [
             'role' => MessageRole::TOOL,
-            'tool_call_id' => $tool->getCallId(),
-            'content' => $tool->getResult()
+            'tool_call_id' => $this->sanitizeString($tool->getCallId()),
+            'content' => $this->sanitizeString((string)$tool->getResult())
         ], $message->getTools());
     }
 }

@@ -18,6 +18,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\SanitizeTrait;
 use NeuronAI\Tools\ToolInterface;
 use stdClass;
 
@@ -27,6 +28,11 @@ use function array_filter;
 
 class MessageMapper implements MessageMapperInterface
 {
+    use SanitizeTrait;
+
+    /**
+     * @throws ProviderException
+     */
     public function map(array $messages): array
     {
         $mapping = [];
@@ -63,11 +69,11 @@ class MessageMapper implements MessageMapperInterface
         return match ($block::class) {
             TextContent::class => [
                 'type' => 'text',
-                'text' => $block->content,
+                'text' => $this->sanitizeString($block->content),
             ],
             ReasoningContent::class => [
                 'type' => 'thinking',
-                'thinking' => $block->content,
+                'thinking' => $this->sanitizeString($block->content),
                 'signature' => $block->id,
             ],
             ImageContent::class => $this->mapImageBlock($block),
@@ -83,7 +89,7 @@ class MessageMapper implements MessageMapperInterface
                 'type' => 'image',
                 'source' => [
                     'type' => 'url',
-                    'url' => $block->content,
+                    'url' => $this->sanitizeString($block->content),
                 ],
             ],
             SourceType::BASE64 => [
@@ -91,7 +97,7 @@ class MessageMapper implements MessageMapperInterface
                 'source' => [
                     'type' => 'base64',
                     'media_type' => $block->mediaType,
-                    'data' => $block->content,
+                    'data' => $this->sanitizeString($block->content),
                 ],
             ],
         };
@@ -104,7 +110,7 @@ class MessageMapper implements MessageMapperInterface
                 'type' => 'document',
                 'source' => [
                     'type' => 'url',
-                    'url' => $block->content,
+                    'url' => $this->sanitizeString($block->content),
                 ],
             ],
             SourceType::BASE64 => [
@@ -112,7 +118,7 @@ class MessageMapper implements MessageMapperInterface
                 'source' => [
                     'type' => 'base64',
                     'media_type' => $block->mediaType,
-                    'data' => $block->content,
+                    'data' => $this->sanitizeString($block->content),
                 ],
             ],
         };
@@ -131,8 +137,8 @@ class MessageMapper implements MessageMapperInterface
         foreach ($message->getTools() as $tool) {
             $parts[] = [
                 'type' => 'tool_use',
-                'id' => $tool->getCallId(),
-                'name' => $tool->getName(),
+                'id' => $this->sanitizeString($tool->getCallId()),
+                'name' => $this->sanitizeString($tool->getName()),
                 'input' => $tool->getInputs() ?: new stdClass(),
             ];
         }
@@ -147,8 +153,8 @@ class MessageMapper implements MessageMapperInterface
     {
         $parts = array_map(fn (ToolInterface $tool): array => [
             'type' => 'tool_result',
-            'tool_use_id' => $tool->getCallId(),
-            'content' => $tool->getResult(),
+            'tool_use_id' => $this->sanitizeString($tool->getCallId()),
+            'content' => $this->sanitizeString((string)$tool->getResult()),
         ], $message->getTools());
 
         if ($contentBlocks = $message->getContentBlocks()) {

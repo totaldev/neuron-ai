@@ -17,6 +17,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\SanitizeTrait;
 use stdClass;
 
 use function array_filter;
@@ -26,6 +27,8 @@ use function json_encode;
 
 class MessageMapper implements MessageMapperInterface
 {
+    use SanitizeTrait;
+
     protected array $mapping = [];
 
     /**
@@ -82,7 +85,7 @@ class MessageMapper implements MessageMapperInterface
     {
         return [
             'type' => $forUser ? 'input_text' : 'output_text',
-            'text' => $block->content,
+            'text' => $this->sanitizeString($block->content),
         ];
     }
 
@@ -91,8 +94,8 @@ class MessageMapper implements MessageMapperInterface
         return [
             'type' => 'file',
             'file' => [
-                'filename' => $block->filename,
-                'file_data' => "data:{$block->mediaType};base64,{$block->content}",
+                'filename' => $this->sanitizeString($block->filename),
+                'file_data' => "data:{$this->sanitizeString($block->mediaType)};base64,{$this->sanitizeString($block->content)}",
             ]
         ];
     }
@@ -102,8 +105,8 @@ class MessageMapper implements MessageMapperInterface
         return [
             'type' => 'input_image',
             'image_url' => match ($block->sourceType) {
-                SourceType::URL => $block->content,
-                SourceType::BASE64 => 'data:'.$block->mediaType.';base64,'.$block->content,
+                SourceType::URL => $this->sanitizeString($block->content),
+                SourceType::BASE64 => 'data:'.$this->sanitizeString($block->mediaType).';base64,'.$this->sanitizeString($block->content),
             },
         ];
     }
@@ -124,9 +127,9 @@ class MessageMapper implements MessageMapperInterface
         foreach ($message->getTools() as $tool) {
             $this->mapping[] = [
                 'type' => 'function_call',
-                'name' => $tool->getName(),
-                'arguments' => json_encode($tool->getInputs() ?: new stdClass()),
-                'call_id' => $tool->getCallId(),
+                'name' => $this->sanitizeString($tool->getName()),
+                'arguments' => json_encode($this->sanitizeForJson($tool->getInputs() ?: new stdClass())),
+                'call_id' => $this->sanitizeString($tool->getCallId()),
             ];
         }
     }
@@ -136,8 +139,8 @@ class MessageMapper implements MessageMapperInterface
         foreach ($message->getTools() as $tool) {
             $this->mapping[] = [
                 'type' => 'function_call_output',
-                'call_id' => $tool->getCallId(),
-                'output' => $tool->getResult(),
+                'call_id' => $this->sanitizeString($tool->getCallId()),
+                'output' => $this->sanitizeString((string)$tool->getResult()),
             ];
         }
     }

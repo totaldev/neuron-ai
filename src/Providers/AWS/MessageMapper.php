@@ -11,6 +11,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\SanitizeTrait;
 
 use function array_map;
 use function array_merge;
@@ -18,6 +19,8 @@ use function array_filter;
 
 class MessageMapper implements MessageMapperInterface
 {
+    use SanitizeTrait;
+
     public function map(array $messages): array
     {
         $mapping = [];
@@ -42,11 +45,11 @@ class MessageMapper implements MessageMapperInterface
                     'content' => [
                         [
                             'json' => [
-                                'result' => $tool->getResult(),
+                                'result' => $this->sanitizeString((string)$tool->getResult()),
                             ],
                         ]
                     ],
-                    'toolUseId' => $tool->getCallId(),
+                    'toolUseId' => $this->sanitizeString($tool->getCallId()),
                 ]
             ];
         }
@@ -64,9 +67,9 @@ class MessageMapper implements MessageMapperInterface
         foreach ($message->getTools() as $tool) {
             $toolCallContents[] = [
                 'toolUse' => [
-                    'name' => $tool->getName(),
+                    'name' => $this->sanitizeString($tool->getName()),
                     'input' => $tool->getInputs(),
-                    'toolUseId' => $tool->getCallId(),
+                    'toolUseId' => $this->sanitizeString($tool->getCallId()),
                 ],
             ];
         }
@@ -96,11 +99,11 @@ class MessageMapper implements MessageMapperInterface
     protected function mapContentBlock(ContentBlockInterface $block): ?array
     {
         if ($block instanceof ReasoningContent) {
-            return ['text' => $block->content, 'signature' => $block->id];
+            return ['text' => $this->sanitizeString($block->content), 'signature' => $block->id];
         }
 
         if ($block instanceof TextContent) {
-            return ['text' => $block->content];
+            return ['text' => $this->sanitizeString($block->content)];
         }
 
         return null;

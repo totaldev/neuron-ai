@@ -7,10 +7,13 @@ namespace NeuronAI\Chat\Messages\ContentBlocks;
 use NeuronAI\Chat\Enums\ContentBlockType;
 use NeuronAI\Chat\Enums\SourceType;
 
+use NeuronAI\Providers\SanitizeTrait;
 use function array_filter;
 
 class ImageContent extends ContentBlock
 {
+    use SanitizeTrait;
+
     public function __construct(
         string $content,
         public readonly SourceType $sourceType,
@@ -31,9 +34,9 @@ class ImageContent extends ContentBlock
     {
         return array_filter([
             'type' => $this->getType()->value,
-            'source' => $this->content,
+            'source' => $this->sanitizeString($this->content),
             'source_type' => $this->sourceType->value,
-            'media_type' => $this->mediaType,
+            'media_type' => $this->mediaType ? $this->sanitizeString($this->mediaType) : null,
         ]);
     }
 }

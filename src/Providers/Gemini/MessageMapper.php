@@ -20,6 +20,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Exceptions\ProviderException;
 use NeuronAI\Providers\MessageMapperInterface;
+use NeuronAI\Providers\SanitizeTrait;
 use NeuronAI\Tools\ToolInterface;
 use stdClass;
 
@@ -28,6 +29,8 @@ use function array_filter;
 
 class MessageMapper implements MessageMapperInterface
 {
+    use SanitizeTrait;
+
     /**
      * @throws ProviderException
      */
@@ -66,11 +69,11 @@ class MessageMapper implements MessageMapperInterface
     {
         return match ($block::class) {
             TextContent::class => [
-                'text' => $block->content,
+                'text' => $this->sanitizeString($block->content),
             ],
             ReasoningContent::class => [
                 'thought' => true,
-                'text' => $block->content,
+                'text' => $this->sanitizeString($block->content),
             ],
             ImageContent::class,
             FileContent::class,
@@ -85,14 +88,14 @@ class MessageMapper implements MessageMapperInterface
         return match ($block->sourceType) {
             SourceType::URL => [
                 'file_data' => [
-                    'file_uri' => $block->content,
-                    'mime_type' => $block->mediaType,
+                    'file_uri' => $this->sanitizeString($block->content),
+                    'mime_type' => $block->mediaType ? $this->sanitizeString($block->mediaType) : null,
                 ],
             ],
             SourceType::BASE64 => [
                 'inline_data' => [
-                    'data' => $block->content,
-                    'mime_type' => $block->mediaType,
+                    'data' => $this->sanitizeString($block->content),
+                    'mime_type' => $block->mediaType ? $this->sanitizeString($block->mediaType) : null,
                 ]
             ]
         };
@@ -109,13 +112,13 @@ class MessageMapper implements MessageMapperInterface
         foreach ($message->getTools() as $index => $tool) {
             $part = [
                 'functionCall' => [
-                    'name' => $tool->getName(),
+                    'name' => $this->sanitizeString($tool->getName()),
                     'args' => $tool->getInputs() !== [] ? $tool->getInputs() : new stdClass(),
                 ]
             ];
 
             if ($index === 0 && $signature = $message->getMetadata('thoughtSignature')) {
-                $part['thoughtSignature'] = $signature;
+                $part['thoughtSignature'] = $this->sanitizeString($signature);
             }
 
             $parts[] = $part;
@@ -131,10 +134,10 @@ class MessageMapper implements MessageMapperInterface
     {
         $parts = array_map(fn (ToolInterface $tool): array => [
             'functionResponse' => [
-                'name' => $tool->getName(),
+                'name' => $this->sanitizeString($tool->getName()),
                 'response' => [
-                    'name' => $tool->getName(),
-                    'content' => $tool->getResult(),
+                    'name' => $this->sanitizeString($tool->getName()),
+                    'content' => $this->sanitizeString((string)$tool->getResult()),
                 ],
             ],
         ], $message->getTools());

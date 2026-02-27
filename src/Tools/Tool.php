@@ -6,6 +6,7 @@ namespace NeuronAI\Tools;
 
 use NeuronAI\Exceptions\MissingCallbackParameter;
 use NeuronAI\Exceptions\ToolCallableNotSet;
+use NeuronAI\Providers\SanitizeTrait;
 use NeuronAI\StaticConstructor;
 use NeuronAI\StructuredOutput\Deserializer\Deserializer;
 use NeuronAI\StructuredOutput\Deserializer\DeserializerException;
@@ -13,7 +14,6 @@ use ReflectionException;
 use stdClass;
 
 use function array_key_exists;
-use function array_map;
 use function array_reduce;
 use function call_user_func;
 use function is_array;
@@ -179,7 +179,7 @@ class Tool implements ToolInterface
 
     public function setResult(mixed $result): self
     {
-        $this->result = is_array($result) ? json_encode($result) : (string) $result;
+        $this->result = is_array($result) ? json_encode($result, JSON_THROW_ON_ERROR) : (string) $result;
 
         return $this;
     }
