@@ -25,8 +25,6 @@ use NeuronAI\Workflow\WorkflowInterrupt;
 use Generator;
 use Throwable;
 
-use function is_array;
-
 /**
  * @method AgentState resolveState()
  */
