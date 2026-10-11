@@ -37,9 +37,9 @@ Each one is a chapter of the documentation:
 
 There is also no second framework waiting for you when the project grows. The same Workflow that runs your first agent in the getting started guide runs a multi-agent system with state, loops, and human approvals in production. What you learn on day one is what you ship in future projects.
 
-## A Vertical & Independent Ecosystem
+## A Vertical Ecosystem
 
-Neuron is also the only vertical ecosystem for agentic applications development in PHP.
+Neuron is the vertical ecosystem for agentic applications development in PHP.
 Around the framework there is a registry of extensions, tools, and technologies designed specifically for agentic applications,
 and a growing number of companies building on the same architecture instead of assembling their own from scattered parts.
 
