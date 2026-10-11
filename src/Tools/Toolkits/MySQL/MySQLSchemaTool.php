@@ -237,6 +237,8 @@ class MySQLSchemaTool extends Tool
             $params = array_merge($this->tables, $this->tables);
         }
 
+        // ORDINAL_POSITION must appear in the SELECT list: MySQL/MariaDB with
+        // ONLY_FULL_GROUP_BY reject DISTINCT + ORDER BY on non-selected columns.
         $stmt = $this->pdo->prepare("
             SELECT DISTINCT
                 kcu.CONSTRAINT_NAME,
@@ -245,7 +247,8 @@ class MySQLSchemaTool extends Tool
                 kcu.REFERENCED_TABLE_NAME as target_table,
                 kcu.REFERENCED_COLUMN_NAME as target_column,
                 rc.UPDATE_RULE,
-                rc.DELETE_RULE
+                rc.DELETE_RULE,
+                kcu.ORDINAL_POSITION
             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
             JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
                 ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
