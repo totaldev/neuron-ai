@@ -91,7 +91,6 @@ Finish with a short summary of what you installed and what you found.
 ## How To
 
 - [Getting Started](#start)
-- [Monitoring](#monitoring)
 - [AI Providers](#providers)
 - [Tools & Toolkits](#tools)
 - [MCP Connector](#mcp)
@@ -175,27 +174,6 @@ echo $response->getContent();
 ```
 
 As you can see in the example above, the Agent has memory of the ongoing conversation. Learn more about memory in the [documentation](https://docs.neuron-ai.dev/agent/chat-history-and-memory).
-
-<a name="monitoring">
-
-## Monitoring & Debugging
-
-Many of the Agents you build with Neuron will contain multiple steps with multiple invocations of LLM calls,
-tool usage, access to external memories, etc. As these applications get more and more complex, it becomes crucial
-to be able to inspect what exactly your agent is doing and why.
-
-The best way to take your AI application under control is with [Inspector](https://inspector.dev). After you sign up,
-make sure to set the `INSPECTOR_INGESTION_KEY` variable in the application environment file to start monitoring:
-
-```dotenv
-INSPECTOR_INGESTION_KEY=fwe45gtxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-After configuring the environment variable, you will see the agent execution timeline in your Inspector dashboard.
-
-[![](./docs/images/inspector.png)](https://inspector.dev)
-
-Learn more about Monitoring in the [documentation](https://docs.neuron-ai.dev/agent/observability).
 
 <a name="providers">
 
