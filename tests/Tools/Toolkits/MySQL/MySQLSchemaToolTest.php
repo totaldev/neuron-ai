@@ -158,6 +158,18 @@ class MySQLSchemaToolTest extends TestCase
         }
     }
 
+    public function test_relationships_query_selects_ordinal_position_for_strict_sql_mode(): void
+    {
+        (new MySQLSchemaTool($this->informationSchema()))();
+
+        $sql = $this->lookup('KEY_COLUMN_USAGE')['sql'];
+
+        $this->assertMatchesRegularExpression(
+            '/SELECT DISTINCT\b[\s\S]*\bkcu\.ORDINAL_POSITION\b[\s\S]*\bORDER BY\b[\s\S]*\bkcu\.ORDINAL_POSITION\b/i',
+            $sql
+        );
+    }
+
     public function test_tool_takes_no_input(): void
     {
         $tool = new MySQLSchemaTool($this->createMock(PDO::class));
