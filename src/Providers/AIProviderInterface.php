@@ -66,5 +66,13 @@ interface AIProviderInterface
      */
     public function structured(array $messages, string $class, array $response_schema): Message;
 
+    /**
+     * Async variant of structured(): returns a promise instead of blocking.
+     *
+     * @param Message[] $messages
+     * @param array<string, mixed> $response_schema
+     */
+    public function structuredAsync(array $messages, string $class, array $response_schema): PromiseInterface;
+
     public function setClient(Client $client): AIProviderInterface;
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronAI\Providers\OpenAI;
 
+use GuzzleHttp\Promise\PromiseInterface;
 use NeuronAI\Chat\Messages\Message;
 
 use function end;
@@ -34,6 +35,37 @@ trait HandleStructured
         ]);
 
         return $this->chat($messages);
+    }
+
+    /**
+     * Async variant of structured(): attaches the same response_format
+     * parameters and returns the chatAsync() promise instead of blocking on chat().
+     *
+     * Requires the provider to implement HandleChat::chatAsync() (all providers
+     * using this trait do). When a shared Guzzle client with the multiplexing
+     * CurlMultiHandler is used, several structuredAsync() promises progress
+     * concurrently.
+     */
+    public function structuredAsync(
+        array $messages,
+        string $class,
+        array $response_format,
+    ): PromiseInterface {
+        $tk = explode('\\', $class);
+        $className = end($tk);
+
+        $this->parameters = array_replace_recursive($this->parameters, [
+            'response_format' => [
+                'type' => 'json_schema',
+                'json_schema' => [
+                    'strict' => $this->strict_response,
+                    "name" => $this->sanitizeClassName($className),
+                    "schema" => $response_format,
+                ],
+            ]
+        ]);
+
+        return $this->chatAsync($messages);
     }
 
     protected function sanitizeClassName(string $name): string
