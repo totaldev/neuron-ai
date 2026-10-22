@@ -28,7 +28,10 @@ use NeuronAI\StructuredOutput\Deserializer\Deserializer;
 use NeuronAI\StructuredOutput\Deserializer\DeserializerException;
 use NeuronAI\StructuredOutput\JsonExtractor;
 use NeuronAI\StructuredOutput\JsonSchema;
+use NeuronAI\StructuredOutput\SchemaProperty;
 use NeuronAI\StructuredOutput\Validation\Validator;
+use ReflectionClass;
+use ReflectionProperty;
 use NeuronAI\Workflow\Events\Event;
 use NeuronAI\Workflow\Interrupt\InterruptRequest;
 use NeuronAI\Workflow\Node;
@@ -38,9 +41,11 @@ use Exception;
 use Generator;
 use Throwable;
 
+use function array_merge;
 use function count;
 use function get_class;
 use function implode;
+use function is_array;
 use function trim;
 
 use const PHP_EOL;
@@ -316,6 +321,11 @@ class Agent extends Workflow implements AgentInterface
 
         EventBus::emit('structured-validating', $this, new \NeuronAI\Observability\Events\Validating($class, $json));
         $violations = Validator::validate($obj);
+        // В текущей версии пакета required-массивное поле может оказаться
+        // ПУСТЫМ (атрибут #[ArrayOf] в классах-схемах не работает), и
+        // Validator::validate() это пропускает. Дополнительная проверка
+        // заставляет corrective-retry сработать на пустом массиве.
+        $violations = array_merge($violations, $this->structuredAsyncRequiredArrayViolations($obj));
         if (count($violations) > 0) {
             EventBus::emit('structured-validated', $this, new \NeuronAI\Observability\Events\Validated($class, $json, $violations));
             throw new AgentException(PHP_EOL.'- '.implode(PHP_EOL.'- ', $violations));
@@ -323,6 +333,32 @@ class Agent extends Workflow implements AgentInterface
         EventBus::emit('structured-validated', $this, new \NeuronAI\Observability\Events\Validated($class, $json));
 
         return $obj;
+    }
+
+    /**
+     * Проверка пустых required-массивных полей (обязательный список, который
+     * модель обязана была заполнить). Сигнатура ответа с пустым массивом —
+     * это ошибка, на которую corrective-retry должен реагировать.
+     *
+     * @throws ReflectionException
+     */
+    private function structuredAsyncRequiredArrayViolations(object $obj): array
+    {
+        $violations = [];
+        $reflection = new ReflectionClass($obj);
+        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            $attributes = $property->getAttributes(SchemaProperty::class);
+            if ($attributes === [] || $attributes[0]->newInstance()->required !== true) {
+                continue;
+            }
+
+            $value = $property->isInitialized($obj) ? $property->getValue($obj) : null;
+            if (is_array($value) && $value === []) {
+                $violations[] = $property->getName() . ' must not be an empty array (заполни обязательный список)';
+            }
+        }
+
+        return $violations;
     }
 
     /**
